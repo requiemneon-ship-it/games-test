@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1c1530">
+<title>Разложи всё</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0f0b1c; overflow: hidden; touch-action: none;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+    font-family: system-ui, "Segoe UI", sans-serif; color: #fff; }
+  #stage { position: fixed; top: 0; bottom: 0; left: 50%; width: min(100vw, 62vh); transform: translateX(-50%);
+    overflow: hidden; background: #1c1530; }
+  canvas { display: block; width: 100%; height: 100%; }
+  button { font: inherit; font-weight: 700; color: #fff; border: 0; border-radius: 14px; cursor: pointer;
+    background: linear-gradient(135deg,#7c5cff,#ff5c9d); padding: 14px 22px; font-size: 18px; width: 100%; }
+  button.alt { background: rgba(255,255,255,.14); }
+  button.gold { background: linear-gradient(135deg,#ffb347,#ff7e47); }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .5; }
+  #top { position: absolute; left: 0; right: 0; top: 0; padding: calc(env(safe-area-inset-top) + 10px) 12px 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 6px; pointer-events: none; }
+  #top > * { pointer-events: auto; }
+  .chip { background: rgba(255,255,255,.12); border-radius: 14px; padding: 8px 12px; font-weight: 800; font-size: 17px;
+    display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .chip button { width: 26px; height: 26px; padding: 0; border-radius: 50%; font-size: 18px; line-height: 26px;
+    background: linear-gradient(135deg,#ffb347,#ff7e47); }
+  .sq { width: 42px; padding: 8px 0; font-size: 20px; background: rgba(255,255,255,.12); }
+  #prog { position: absolute; left: 14px; right: 14px; top: calc(env(safe-area-inset-top) + 62px); height: 8px; border-radius: 6px;
+    background: rgba(255,255,255,.12); overflow: hidden; pointer-events: none; }
+  #progFill { display: block; height: 100%; width: 0; border-radius: 6px; background: linear-gradient(90deg,#7c5cff,#ff5c9d);
+    transition: width .35s cubic-bezier(.2,.9,.3,1.2); }
+  #tip { position: absolute; left: 16px; right: 16px; top: calc(env(safe-area-inset-top) + 76px); text-align: center; font-size: 14px; opacity: .85; pointer-events: none; }
+  #bottom { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 10px; padding: 0 12px calc(env(safe-area-inset-bottom) + 14px); }
+  .tool { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; font-size: 22px; }
+  .tool small { font-size: 13px; opacity: .9; }
+  #ui { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .panel { pointer-events: auto; display: none; flex-direction: column; gap: 12px; align-items: center; text-align: center;
+    padding: 24px 26px; border-radius: 22px; background: rgba(20,16,40,.95); min-width: 250px; max-width: 86%; box-shadow: 0 12px 40px rgba(0,0,0,.45); }
+  .panel.show { display: flex; animation: pop .28s cubic-bezier(.2,.9,.3,1.25); }
+  @keyframes pop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .panel h1 { margin: 0; font-size: 38px; }
+  .panel h2 { margin: 0; font-size: 26px; }
+  .sub { opacity: .75; font-size: 15px; }
+  .big { font-size: 44px; font-weight: 800; }
+  #stars { display: flex; gap: 6px; font-size: 46px; line-height: 1; }
+  #stars span { color: rgba(255,255,255,.18); transition: color .2s, transform .35s cubic-bezier(.2,1.6,.4,1); transform: scale(.7); }
+  #stars span.on { color: #ffd24a; transform: scale(1.12); text-shadow: 0 0 18px rgba(255,210,74,.7); }
+  @media (prefers-reduced-motion: reduce) { .panel.show { animation: none; } #progFill { transition: none; } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="top">
+    <button class="sq" id="restart" title="Restart">↻</button>
+    <button class="sq" id="bSound" title="Sound">🔊</button>
+    <div class="chip" id="lvl"></div>
+    <div class="chip"><span id="coinN">0</span><span>🪙</span><button id="bCoinAd" title="+">+</button></div>
+  </div>
+  <div id="prog"><i id="progFill"></i></div>
+  <div id="tip"></div>
+  <div id="bottom">
+    <button class="tool" id="bUndo">↶<small id="cUndo"></small></button>
+    <button class="tool" id="bHint">💡<small id="cHint"></small></button>
+    <button class="tool" id="bExtra">➕<small id="cExtra"></small></button>
+  </div>
+  <div id="ui">
+    <div class="panel" id="pStart">
+      <h1 data-i18n="title">Разложи всё</h1>
+      <div class="sub" data-i18n="tagline">Собирай по три одинаковых</div>
+      <div class="sub" id="startLevel"></div>
+      <div class="sub" id="startStars"></div>
+      <button id="bPlay" data-i18n="play">Играть</button>
+      <button class="alt" id="bNoAds" data-i18n="noAds">Убрать рекламу</button>
+    </div>
+    <div class="panel" id="pWin">
+      <h2 data-i18n="win">Уровень пройден!</h2>
+      <div id="stars"><span>★</span><span>★</span><span>★</span></div>
+      <div class="sub" id="winMoves"></div>
+      <div class="big" id="winCoins">+10 🪙</div>
+      <button class="gold" id="bTriple"></button>
+      <button id="bNext" data-i18n="next">Дальше</button>
+    </div>
+    <div class="panel" id="pStuck">
+      <h2 data-i18n="stuck">Нет ходов</h2>
+      <div class="sub" data-i18n="stuckHint">Отмените ход или начните заново</div>
+      <button id="bStuckUndo"></button>
+      <button class="alt" id="bStuckRestart" data-i18n="restart">Заново</button>
+    </div>
+    <div class="panel" id="pCoins">
+      <h2 data-i18n="noCoins">Не хватает монет</h2>
+      <button class="gold" id="bGetCoins"></button>
+      <button class="alt" id="bCloseCoins" data-i18n="close">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<script>window.PlatformConfig = { demo: true };</script>
+<script>
+/* Общий слой для казуальных прототипов: хранилище, тексты (ru/en), звук, монеты и ежедневный бонус, реклама и покупка.
+   Подключается тегом <script> до кода игры. Реальная реклама/покупки приходят из моста платформы
+   (src/yandex-bridge.js для Яндекс Игр): window.NativeAds / window.NativeBilling / window.PlatformHooks.
+   В обычном браузере реклама и покупка имитируются, чтобы игры можно было отлаживать без SDK. */
+(function (global) {
+  'use strict';
+  const PH = global.PlatformHooks || {};
+  const PCFG = global.PlatformConfig || {};
+  const call = (fn, ...a) => { try { return fn && fn(...a); } catch (e) {} };
+
+  /* ---------- Хранилище (localStorage с префиксом игры) ---------- */
+  let GAME_ID = 'game';
+  const DEMO = !!PCFG.demo;                       // тестовая веб-версия: без покупок (в ней нельзя показывать confirm)
+  const mem = {};                                  // запасное хранилище, если localStorage недоступен (приватное окно и т.п.)
+  const store = {
+    get(k, d) {
+      const key = GAME_ID + ':' + k;
+      try { const v = localStorage.getItem(key); if (v !== null) return JSON.parse(v); } catch (e) {}
+      return key in mem ? mem[key] : d;
+    },
+    set(k, v) { const key = GAME_ID + ':' + k; mem[key] = v; try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} },
+  };
+
+  /* ---------- Тексты ---------- */
+  const dict = { ru: {}, en: {} };
+  let lang = 'ru';
+  const t = (k, ...a) => {
+    let s = (dict[lang] && dict[lang][k]) ?? (dict.ru && dict.ru[k]) ?? k;
+    a.forEach((v, i) => { s = s.replace('{' + i + '}', v); });
+    return s;
+  };
+  function setStrings(s) { for (const l of Object.keys(s)) dict[l] = Object.assign(dict[l] || {}, s[l]); }
+  function applyI18n() {
+    document.documentElement.lang = lang;
+    document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+    if (dict[lang] && dict[lang].title) document.title = dict[lang].title;
+  }
+  function setLang(l) {
+    lang = dict[l] ? l : (String(l).toLowerCase().startsWith('ru') ? 'ru' : 'en');
+    applyI18n();
+    if (api.onLang) api.onLang(lang);
+  }
+
+  /* ---------- Звук ---------- */
+  const Snd = (() => {
+    let ctx = null, master = null;
+    const s = { muted: false, userMuted: false };     // muted — временно (реклама), userMuted — выбор игрока, хранится между запусками
+    function ensure() {
+      ctx = ctx || new (global.AudioContext || global.webkitAudioContext)();
+      if (!master) {                                  // мягкий компрессор, чтобы наложение звуков не клипало
+        master = ctx.createGain(); master.gain.value = .9;
+        const comp = ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination);
+      }
+    }
+    function beep(freq, dur, type = 'sine', vol = .15, delay = 0, endFreq = 0) {
+      if (s.muted || s.userMuted || document.hidden) return;
+      try {
+        ensure();
+        const o = ctx.createOscillator(), g = ctx.createGain(), t0 = ctx.currentTime + delay;
+        o.type = type; o.frequency.setValueAtTime(freq, t0);
+        if (endFreq) o.frequency.exponentialRampToValueAtTime(endFreq, t0 + dur);
+        o.connect(g); g.connect(master);
+        g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + .008); g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+        o.start(t0); o.stop(t0 + dur + .02);
+      } catch (e) {}
+    }
+    const semi = n => Math.pow(2, n / 12);
+    s.tap = () => beep(660, .05, 'triangle', .1);
+    s.select = () => { beep(700, .07, 'triangle', .12); beep(990, .08, 'sine', .08, .04); };
+    s.move = () => beep(300, .14, 'sine', .14, 0, 520);                 // короткий «свист» вверх
+    s.land = () => beep(190, .12, 'sine', .22, 0, 90);                  // мягкий «тук»
+    s.slide = () => beep(240, .1, 'triangle', .1, 0, 340);
+    // «Сбор»: аккорд, который с каждым комбо звучит выше (n — номер комбо, до 7 полутонов)
+    s.clear = (n = 0) => { const k = semi(Math.min(n, 7)); [523, 659, 784].forEach((f, i) => beep(f * k, .22, 'sine', .15, i * .06)); beep(1046 * k, .3, 'triangle', .07, .18); };
+    s.star = (i = 0) => { beep(880 * semi(i * 4), .35, 'sine', .16); beep(1760 * semi(i * 4), .3, 'triangle', .05, .02); };
+    s.win = () => [523, 659, 784, 1047].forEach((f, i) => beep(f, .22, 'sine', .17, i * .1));
+    s.fail = () => beep(220, .3, 'sawtooth', .08, 0, 110);
+    s.coin = () => { beep(900, .08, 'square', .06); beep(1200, .12, 'square', .06, .07); };
+    s.toggle = () => { s.userMuted = !s.userMuted; store.set('muted', s.userMuted); return s.userMuted; };
+    s.suspend = () => { try { ctx && ctx.suspend(); } catch (e) {} };
+    s.resume = () => { try { ctx && !s.muted && !s.userMuted && ctx.resume(); } catch (e) {} };
+    return s;
+  })();
+  const vib = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { Snd.suspend(); call(PH.gameplayStop); }
+    else { Snd.resume(); if (api.playing) call(PH.gameplayStart); }
+  });
+  addEventListener('contextmenu', e => e.preventDefault());
+
+  /* ---------- Всплывающие сообщения ---------- */
+  let toastEl = null, toastTimer = 0;
+  function toast(text, ms = 1400) {
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.style.cssText = 'position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:30;max-width:80vw;text-align:center;' +
+        'background:rgba(20,18,43,.92);color:#fff;font:700 18px system-ui,sans-serif;padding:10px 18px;border-radius:14px;' +
+        'pointer-events:none;opacity:0;transition:opacity .2s';
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = text; toastEl.style.opacity = 1;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { toastEl.style.opacity = 0; }, ms);
+  }
+
+  /* ---------- Монеты и ежедневный бонус ---------- */
+  const Economy = {
+    get coins() { return store.get('coins', 40); },
+    add(n) { store.set('coins', Math.max(0, this.coins + n)); if (this.onChange) this.onChange(); },
+    spend(n) { if (this.coins < n) return false; this.add(-n); return true; },
+    onChange: null,
+    /** Начисляет ежедневный бонус, если сегодня ещё не получали. Возвращает { amount, streak } или null. */
+    claimDaily() {
+      const d = new Date(), key = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+      const last = store.get('dailyKey', null);
+      if (last === key) return null;
+      const y = new Date(d.getTime() - 864e5), yKey = y.getFullYear() + '-' + (y.getMonth() + 1) + '-' + y.getDate();
+      const streak = last === yKey ? store.get('streak', 0) + 1 : 1;
+      const amount = 30 + 10 * Math.min(streak - 1, 6);
+      store.set('dailyKey', key); store.set('streak', streak);
+      this.add(amount);
+      return { amount, streak };
+    },
+  };
+
+  /* ---------- Реклама и покупка ---------- */
+  let adOverlay = null;
+  function fakeAd(cb) {
+    if (!adOverlay) {
+      adOverlay = document.createElement('div');
+      adOverlay.style.cssText = 'position:fixed;inset:0;z-index:50;background:#000d;color:#fff;display:none;align-items:center;' +
+        'justify-content:center;flex-direction:column;gap:8px;font:20px system-ui,sans-serif';
+      document.body.appendChild(adOverlay);
+    }
+    let n = 2; adOverlay.style.display = 'flex';
+    adOverlay.innerHTML = '<div>' + t('ad') + '</div><div>' + n + '</div>';
+    const id = setInterval(() => {
+      n--; adOverlay.innerHTML = '<div>' + t('ad') + '</div><div>' + n + '</div>';
+      if (n <= 0) { clearInterval(id); adOverlay.style.display = 'none'; cb(true); }
+    }, 1000);
+  }
+  const Monetization = {
+    adsRemoved: store.get('noads', false),
+    levelsSinceAd: 0,
+    EVERY: PCFG.interstitialEvery || 3,
+    _set(v) { this.adsRemoved = v; store.set('noads', v); },
+    // На время полноэкранной рекламы глушим звук и сообщаем платформе, что геймплей остановлен.
+    _wrap(run, cb) {
+      Snd.muted = true; call(PH.gameplayStop);
+      run((...a) => { Snd.muted = false; if (api.playing) call(PH.gameplayStart); cb(...a); });
+    },
+    init(onChange) {
+      if (global.NativeAds) global.NativeAds.init().then(onChange);
+      if (global.NativeBilling) global.NativeBilling.hasRemoveAds().then(owned => {
+        if (owned === null || owned === this.adsRemoved) return;
+        this._set(owned); if (onChange) onChange();
+      });
+    },
+    /** Реклама за награду. cb(true) — досмотрена; cb(false, 'unavailable') — реклама не загрузилась. */
+    rewarded(cb) {
+      this._wrap(done => {
+        if (global.NativeAds) global.NativeAds.showRewarded().then(r => done(!!r.rewarded, r.reason), () => done(false, 'unavailable'));
+        else fakeAd(done);
+      }, (ok, reason) => { if (!ok && reason === 'unavailable') toast(t('adUnavailable')); cb(ok); });
+    },
+    /** Вызывать после каждого пройденного уровня: раз в EVERY уровней показывает межстраничную рекламу. */
+    levelDone(done) {
+      if (this.adsRemoved || ++this.levelsSinceAd < this.EVERY) return done();
+      this.levelsSinceAd = 0;
+      this._wrap(end => {
+        if (global.NativeAds) global.NativeAds.showInterstitial().then(end, end);
+        else fakeAd(() => end());
+      }, () => done());
+    },
+    buyRemoveAds(cb) {
+      if (DEMO) { toast(t('demoNoBuy')); return cb(false); }
+      if (global.NativeBilling) global.NativeBilling.buyRemoveAds().then(ok => { if (ok) this._set(true); cb(ok); });
+      else if (confirm(t('devBuy'))) { this._set(true); cb(true); } else cb(false);
+    },
+  };
+
+  setStrings({
+    ru: { demoNoBuy: 'В тестовой версии покупок нет', ad: 'Реклама', adUnavailable: 'Реклама пока недоступна', devBuy: '[DEV] Имитация покупки «Убрать рекламу». Купить?', noAds: 'Убрать рекламу',
+          adsOff: 'Реклама отключена', coins: 'монет', daily: 'Ежедневный бонус: +{0}', dailyStreak: 'Серия дней: {0}' },
+    en: { demoNoBuy: 'No purchases in the test version', ad: 'Ad', adUnavailable: 'Ad not available right now', devBuy: '[DEV] Simulated "Remove ads" purchase. Buy?', noAds: 'Remove ads',
+          adsOff: 'Ads removed', coins: 'coins', daily: 'Daily bonus: +{0}', dailyStreak: 'Day streak: {0}' },
+  });
+
+  const api = {
+    init(opts) {
+      GAME_ID = opts.id;
+      Snd.userMuted = !!store.get('muted', false);
+      if (opts.strings) setStrings(opts.strings);
+      Monetization.adsRemoved = store.get('noads', false);
+      setLang(navigator.language || 'ru');
+      const p = call(PH.getLang);
+      if (p) p.then(l => l && setLang(l));
+    },
+    store, t, setStrings, setLang, applyI18n, Snd, vib, toast, Economy, Monetization, PH, demo: DEMO,
+    get lang() { return lang; },
+    playing: false,                 // игра ставит true во время раунда: от этого зависят GameplayAPI.start/stop
+    ready() { call(PH.ready); },
+    gameplayStart() { api.playing = true; call(PH.gameplayStart); },
+    gameplayStop() { api.playing = false; call(PH.gameplayStop); },
+    onLang: null,
+  };
+  global.Platform = api;
+})(window);
+
+</script>
+<script>
+/* «Полки» — чистая логика (без DOM): состояние, ходы, решатель и генератор уровней.
+   Работает и в браузере (глобальный SortLogic), и в Node (module.exports) — на этом держатся автотесты.
+
+   Состояние: { shelves: [ { front: [a, b, c], queue: [[a, b, c], ...] } ] }
+   front — три ячейки на виду (-1 = пусто), queue — ряды позади: когда передняя полка опустела, следующий ряд выдвигается вперёд.
+   Ход: взять предмет с одной полки и поставить в пустую ячейку другой. Три одинаковых на полке исчезают. */
+(function (root) {
+  'use strict';
+  const EMPTY = -1;
+
+  function rng(seed) {                        // mulberry32: один и тот же номер уровня всегда даёт один и тот же уровень
+    let a = seed >>> 0;
+    return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  const clone = s => ({ shelves: s.shelves.map(sh => ({ front: sh.front.slice(), queue: sh.queue.map(r => r.slice()) })) });
+  const isTriple = f => f[0] !== EMPTY && f[0] === f[1] && f[1] === f[2];
+  const frontEmpty = f => f[0] === EMPTY && f[1] === EMPTY && f[2] === EMPTY;
+
+  /** Параметры сложности по номеру уровня (с 1). */
+  function params(L) {
+    const S = Math.min(4 + Math.floor((L - 1) / 3), 7);                       // число полок
+    const layers = 1 + (L >= 3 ? 1 : 0) + (L >= 9 ? 1 : 0) + (L >= 16 ? 1 : 0);   // рядов на полке (включая передний)
+    const f = Math.max(0.5, 0.75 - 0.015 * L);                                // доля заполненных передних ячеек
+    const types = Math.min(3 + Math.floor(L / 2), 10);                       // сколько разных предметов
+    return { S, layers, f, types };
+  }
+
+  /** После хода/очистки: тройки исчезают, пустая полка подтягивает следующий ряд. Возвращает события для анимации. */
+  function settle(state, events) {
+    let again = true;
+    while (again) {
+      again = false;
+      state.shelves.forEach((sh, i) => {
+        if (isTriple(sh.front)) { events.push({ type: 'clear', shelf: i, item: sh.front[0] }); sh.front = [EMPTY, EMPTY, EMPTY]; again = true; }
+        if (frontEmpty(sh.front) && sh.queue.length) { sh.front = sh.queue.shift(); events.push({ type: 'pull', shelf: i }); again = true; }
+      });
+    }
+  }
+  function canMove(state, i, a, j, b) {
+    return i !== j && state.shelves[i].front[a] !== EMPTY && state.shelves[j].front[b] === EMPTY;
+  }
+  /** Выполняет ход (изменяет state). Возвращает список событий: move / clear / pull. */
+  function applyMove(state, i, a, j, b) {
+    const events = [{ type: 'move', from: i, a, to: j, b, item: state.shelves[i].front[a] }];
+    state.shelves[j].front[b] = state.shelves[i].front[a];
+    state.shelves[i].front[a] = EMPTY;
+    settle(state, events);
+    return events;
+  }
+  const isWon = s => s.shelves.every(sh => frontEmpty(sh.front) && !sh.queue.length);
+  /** Нет ни одного хода: все передние ячейки заняты. */
+  const noMoves = s => !s.shelves.some(sh => sh.front.includes(EMPTY)) || !s.shelves.some(sh => sh.front.some(x => x !== EMPTY));
+
+  function key(s) {
+    return s.shelves.map(sh => sh.front.slice().sort().join('.') + '|' + sh.queue.map(r => r.slice().sort().join('.')).join(','))
+      .sort().join('/');
+  }
+
+  /** Все осмысленные ходы с оценкой (чем выше — тем перспективнее). Одинаковые по типу предметы не перебираются дважды. */
+  function movesOf(s) {
+    const out = [];
+    s.shelves.forEach((sh, i) => {
+      const seen = new Set();
+      sh.front.forEach((x, a) => {
+        if (x === EMPTY || seen.has(x)) return;
+        seen.add(x);
+        const cntI = sh.front.filter(y => y === x).length;
+        s.shelves.forEach((sj, j) => {
+          if (j === i) return;
+          const b = sj.front.indexOf(EMPTY);
+          if (b < 0) return;
+          const cntJ = sj.front.filter(y => y === x).length;
+          const itemsJ = sj.front.filter(y => y !== EMPTY).length;
+          let score = cntJ * 10 - cntI * 4;
+          if (cntJ === 2) score += 100;
+          if (itemsJ === 0) score -= 3;
+          if (sh.front.filter(y => y !== EMPTY).length === 1) score += 6;      // освобождаем полку и подтягиваем ряд
+          out.push({ i, a, j, b, score });
+        });
+      });
+    });
+    return out.sort((p, q) => q.score - p.score);
+  }
+
+  /** Оценка «сколько ещё работы»: оставшиеся предметы, за вычетом готовых пар на полках (их остаётся лишь достроить). */
+  function heuristic(s) {
+    let items = 0, pairs = 0;
+    for (const sh of s.shelves) {
+      items += sh.front.filter(x => x !== EMPTY).length + sh.queue.length * 3;
+      const c = {}; sh.front.forEach(x => { if (x !== EMPTY) c[x] = (c[x] || 0) + 1; });
+      for (const x in c) if (c[x] === 2) pairs++;
+    }
+    return items - 1.5 * pairs;
+  }
+
+  /** Бинарная куча по полю f. */
+  function Heap() {
+    const a = [];
+    return {
+      get size() { return a.length; },
+      push(n) { a.push(n); let i = a.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (a[p].f <= a[i].f) break; [a[p], a[i]] = [a[i], a[p]]; i = p; } },
+      pop() {
+        const top = a[0], last = a.pop();
+        if (a.length) { a[0] = last; let i = 0; for (;;) { let l = 2 * i + 1, r = l + 1, m = i;
+          if (l < a.length && a[l].f < a[m].f) m = l; if (r < a.length && a[r].f < a[m].f) m = r;
+          if (m === i) break; [a[m], a[i]] = [a[i], a[m]]; i = m; } }
+        return top;
+      },
+    };
+  }
+
+  /** Поиск решения по приоритету (взвешенный A*, без рекурсии). Возвращает короткий список ходов {i,a,j,b} или null. cap — лимит узлов. */
+  function solve(start, cap = 60000, weight = 2.2) {
+    const heap = Heap(), best = new Map();
+    const root = clone(start);
+    heap.push({ s: root, g: 0, f: weight * heuristic(root), parent: null, move: null });
+    best.set(key(root), 0);
+    let nodes = 0;
+    while (heap.size && nodes++ < cap) {
+      const node = heap.pop();
+      if (isWon(node.s)) {
+        const path = [];
+        for (let n = node; n.parent; n = n.parent) path.push(n.move);
+        return path.reverse();
+      }
+      if (best.get(key(node.s)) < node.g) continue;
+      for (const m of movesOf(node.s)) {
+        const n = clone(node.s);
+        applyMove(n, m.i, m.a, m.j, m.b);
+        const g = node.g + 1, k = key(n);
+        if (best.has(k) && best.get(k) <= g) continue;
+        best.set(k, g);
+        heap.push({ s: n, g, f: g + weight * heuristic(n), parent: node, move: { i: m.i, a: m.a, j: m.j, b: m.b } });
+      }
+    }
+    return null;
+  }
+
+  /** Детерминированный генератор: один и тот же L даёт один и тот же уровень; уровень всегда решаем (проверено решателем). */
+  function genLevel(L) {
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const rnd = rng(L * 7919 + attempt * 104729 + 13);
+      let { S, layers, f, types } = params(L);
+      f = Math.max(0.35, f - attempt * 0.03);                                 // если не получилось решаемым — ослабляем
+      const frontSlots = S * 3;
+      const queueItems = S * 3 * (layers - 1);
+      let frontItems = Math.round(frontSlots * f);
+      frontItems -= (queueItems + frontItems) % 3;                            // всего предметов кратно трём
+      const total = queueItems + frontItems, triples = total / 3;
+      const items = [];
+      for (let k = 0; k < triples; k++) { const ty = k % types; items.push(ty, ty, ty); }
+      for (let k = items.length - 1; k > 0; k--) { const r = Math.floor(rnd() * (k + 1)); [items[k], items[r]] = [items[r], items[k]]; }
+      const shelves = Array.from({ length: S }, () => ({ front: [EMPTY, EMPTY, EMPTY], queue: [] }));
+      // задние ряды
+      for (const sh of shelves) for (let r = 0; r < layers - 1; r++) sh.queue.push([items.pop(), items.pop(), items.pop()]);
+      // передние ячейки: случайные позиции
+      const slots = [];
+      for (let i = 0; i < S; i++) for (let a = 0; a < 3; a++) slots.push([i, a]);
+      for (let k = slots.length - 1; k > 0; k--) { const r = Math.floor(rnd() * (k + 1)); [slots[k], slots[r]] = [slots[r], slots[k]]; }
+      for (let k = 0; k < frontItems; k++) { const [i, a] = slots[k]; shelves[i].front[a] = items.pop(); }
+      const state = { shelves };
+      if (shelves.some(sh => isTriple(sh.front))) continue;                   // не начинаем с готовой тройки
+      shelves.forEach(sh => { if (frontEmpty(sh.front) && sh.queue.length) sh.front = sh.queue.shift(); });
+      if (shelves.some(sh => isTriple(sh.front))) continue;
+      if (!solve(state, 12000)) continue;
+      return state;
+    }
+    throw new Error('Не удалось сгенерировать решаемый уровень ' + L);
+  }
+
+  const api = { EMPTY, params, clone, canMove, applyMove, isWon, noMoves, solve, genLevel, movesOf, isTriple, frontEmpty };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.SortLogic = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// СГЕНЕРИРОВАНО tools/gen-sort-levels.js — не править вручную.
+window.SORT_LEVELS = [[[[-1,2,0]],[[1,1,2]],[[1,2,-1]],[[0,-1,0]]],[[[2,1,0]],[[0,0,2]],[[-1,1,-1]],[[1,2,-1]]],[[[-1,2,-1],[0,2,3]],[[-1,1,0],[0,1,0]],[[1,3,-1],[3,1,0]],[[-1,1,-1],[1,0,2]]],[[[4,1,2],[0,0,1]],[[0,-1,0],[2,1,3]],[[-1,2,-1],[3,2,2]],[[-1,-1,1],[1,3,2]],[[-1,4,0],[4,0,1]]],[[[-1,2,2],[2,1,0]],[[0,-1,-1],[2,1,0]],[[0,3,0],[2,1,4]],[[-1,-1,0],[1,3,3]],[[-1,1,1],[4,4,2]]],[[[1,-1,2],[0,3,1]],[[2,5,0]],[[0,3,-1],[3,1,0]],[[4,-1,4],[5,0,4]],[[0,5,1],[2,1,1]]],[[[4,0,-1],[0,3,5]],[[-1,2,1],[5,1,1]],[[-1,2,2],[0,2,4]],[[-1,3,0],[0,2,4]],[[1,3,0],[5,3,2]],[[-1,-1,3],[3,1,1]]],[[[0,5,-1],[1,0,2]],[[1,-1,5],[1,0,4]],[[-1,-1,4],[1,3,4]],[[2,-1,1],[6,5,3]],[[-1,-1,0],[3,0,6]],[[2,-1,-1],[0,6,1]]],[[[0,1,2],[1,3,1]],[[0,6,0],[5,4,0],[6,0,1]],[[4,6,-1],[0,5,3],[4,0,6]],[[-1,2,-1],[2,3,2],[2,3,5]],[[-1,-1,3],[6,4,5],[5,6,1]],[[2,-1,0],[4,4,1],[0,5,3]]],[[[-1,4,-1],[1,1,4],[5,6,5]],[[5,1,-1],[2,1,3],[6,2,1]],[[6,-1,5],[6,0,0],[5,2,7]],[[0,-1,2],[0,1,0],[3,7,0]],[[3,-1,-1],[2,4,1],[6,4,3]],[[5,0,7],[7,4,0],[0,3,6]],[[7,-1,-1],[4,3,1],[7,2,1]]],[[[-1,1,-1],[0,5,1],[4,0,7]],[[0,2,-1],[0,2,3],[2,4,1]],[[6,4,6],[3,0,1],[1,0,6]],[[-1,4,6],[7,5,0],[7,3,7]],[[-1,6,-1],[1,3,3],[2,5,5]],[[1,7,4],[6,7,0]],[[3,1,2],[1,2,0],[4,5,5]]],[[[5,7,1],[0,8,1]],[[1,-1,8],[2,2,8],[6,2,3]],[[-1,8,7],[5,0,4],[6,2,8]],[[6,0,4],[3,7,7],[7,5,4]],[[6,-1,2],[4,4,5],[3,4,5]],[[-1,1,0],[1,0,2],[8,7,0]],[[-1,-1,3],[3,6,5],[3,6,1]]],[[[1,-1,-1],[0,5,7],[3,6,7]],[[7,-1,-1],[3,6,1],[0,6,4]],[[-1,-1,5],[2,2,0],[3,0,3]],[[5,-1,0],[1,0,8],[8,5,4]],[[-1,8,1],[4,2,6],[1,8,2]],[[7,7,4],[4,1,6],[3,3,2]],[[5,7,-1],[6,8,8],[5,4,2]]],[[[-1,-1,3],[4,5,6],[1,4,6]],[[4,-1,-1],[6,5,3],[8,2,3]],[[0,0,-1],[2,3,0],[6,7,5]],[[-1,-1,4],[2,0,8],[1,9,7]],[[-1,9,-1],[2,0,2],[8,5,5]],[[7,-1,-1],[4,6,3],[3,1,0]],[[1,-1,5],[6,9,2],[1,1,4]]],[[[6,1,-1],[3,0,8],[3,7,5]],[[-1,9,-1],[1,4,5],[4,6,2]],[[5,-1,-1],[5,1,1],[9,6,6]],[[7,-1,-1],[9,2,7],[8,0,5]],[[0,2,4],[2,5,0]],[[1,-1,-1],[2,3,4],[0,3,6]],[[1,8,3],[4,2,6],[0,4,3]]],[[[1,0,3],[6,9,3],[4,8,3]],[[-1,1,-1],[0,4,6],[0,8,1],[9,2,3]],[[-1,-1,2],[0,9,1],[6,8,4],[1,5,7]],[[9,-1,0],[3,7,5],[5,1,2],[8,0,0]],[[-1,-1,7],[7,4,0],[6,8,2],[1,9,7]],[[-1,3,-1],[7,3,1],[5,4,6],[2,2,2]],[[2,6,8],[2,1,5],[9,4,3],[3,0,5]]],[[[0,-1,-1],[7,3,8],[8,9,7],[1,6,1]],[[-1,-1,3],[2,4,7],[6,4,3],[6,4,8]],[[3,3,0],[2,5,2],[2,6,4],[5,9,5]],[[9,1,-1],[5,5,6],[0,6,3],[0,2,4]],[[-1,0,-1],[0,2,9],[3,1,2],[8,5,0]],[[-1,-1,9],[9,1,0],[1,1,7],[8,7,7]],[[1,0,1],[2,3,4],[8,3,2]]],[[[-1,-1,3],[2,2,6],[6,1,7],[9,0,6]],[[5,-1,3],[3,2,5],[1,2,8],[9,8,7]],[[6,7,-1],[0,5,2],[1,4,8],[1,0,1]],[[2,-1,-1],[0,1,2],[0,5,1],[5,3,0]],[[-1,7,-1],[1,2,8],[3,4,3],[9,6,3]],[[-1,-1,9],[0,6,7],[4,5,4],[2,8,4]],[[-1,-1,9],[8,4,7],[9,0,3],[1,0,3]]],[[[-1,9,-1],[8,8,9],[4,8,1],[6,5,6]],[[2,-1,7],[5,6,3],[6,2,8],[3,1,2]],[[-1,-1,0],[0,2,4],[2,3,2],[0,2,1]],[[8,-1,-1],[4,1,5],[3,7,1],[7,1,0]],[[-1,2,-1],[9,0,4],[0,2,6],[7,7,3]],[[-1,9,6],[5,7,3],[3,4,3],[9,1,5]],[[8,-1,-1],[0,0,5],[1,0,9],[1,4,3]]],[[[9,0,3],[7,2,2],[3,7,5],[8,4,0]],[[9,-1,-1],[0,2,2],[5,8,9],[1,3,8]],[[9,7,-1],[5,7,4],[0,2,3],[0,0,8]],[[0,4,4],[6,2,7],[5,2,2]],[[3,1,-1],[1,3,7],[1,1,5],[1,1,4]],[[1,6,1],[8,6,6],[2,8,9]],[[-1,-1,9],[6,3,0],[0,3,3],[4,6,5]]],[[[7,0,0],[1,4,3],[7,1,7]],[[-1,-1,9],[2,5,3],[3,1,9],[2,8,1]],[[-1,8,-1],[1,9,4],[9,4,3],[2,7,2]],[[-1,2,3],[6,8,0],[2,7,0],[8,2,5]],[[-1,-1,2],[7,5,6],[4,8,4],[8,3,1]],[[1,-1,5],[2,6,0],[0,6,9],[0,6,3]],[[4,5,-1],[6,3,1],[9,0,3],[0,5,1]]],[[[-1,7,6],[2,8,9],[6,8,4],[4,7,2]],[[-1,8,-1],[6,3,5],[7,8,9],[8,3,0]],[[-1,-1,7],[1,1,7],[0,4,6],[3,2,9]],[[3,5,9],[0,2,8],[9,2,1],[0,5,3]],[[3,5,-1],[1,2,0],[1,0,4],[3,1,0]],[[3,1,4],[4,2,1],[1,2,5]],[[6,7,2],[5,3,0],[9,6,0]]],[[[-1,9,-1],[8,9,3],[4,9,6],[5,4,7]],[[-1,-1,4],[0,5,3],[8,0,2],[7,4,1]],[[0,1,-1],[1,8,3],[3,1,2],[9,3,4]],[[0,-1,-1],[1,0,2],[6,3,0],[4,0,2]],[[-1,5,-1],[2,6,8],[1,0,2],[6,9,9]],[[-1,7,-1],[1,7,2],[0,7,8],[5,5,3]],[[6,1,-1],[3,6,2],[5,7,8],[3,1,2]]],[[[4,-1,-1],[0,6,8],[4,0,8],[0,4,5]],[[4,3,-1],[8,7,3],[6,6,9],[8,7,4]],[[8,0,-1],[5,3,1],[9,9,2],[5,8,7]],[[-1,-1,6],[3,7,2],[2,1,1],[1,1,4]],[[5,3,2],[9,5,6],[2,0,7]],[[9,-1,3],[2,3,1],[5,0,0],[1,9,3]],[[0,-1,-1],[3,2,2],[0,2,7],[1,1,6]]],[[[-1,1,5],[1,2,2],[1,3,3],[9,0,1]],[[-1,-1,1],[9,8,8],[0,6,3],[6,4,9]],[[-1,6,-1],[3,1,2],[8,0,4],[8,6,4]],[[7,-1,4],[2,5,4],[8,9,7],[5,5,4]],[[6,-1,-1],[0,9,0],[6,2,7],[0,2,9]],[[-1,-1,5],[3,3,0],[5,7,3],[2,7,8]],[[-1,0,-1],[7,1,3],[2,1,2],[0,3,1]]],[[[3,-1,-1],[2,5,1],[8,7,2],[2,0,0]],[[0,-1,9],[4,0,0],[7,1,1],[2,3,3]],[[-1,8,-1],[5,5,5],[3,2,2],[0,9,2]],[[-1,-1,5],[6,7,6],[1,1,1],[1,4,4]],[[9,3,0],[3,7,4],[2,4,6]],[[6,-1,9],[4,6,3],[0,1,7],[8,9,7]],[[6,-1,1],[8,3,2],[9,8,0],[3,5,8]]],[[[4,-1,0],[1,6,9],[6,4,2],[0,7,3]],[[9,2,3],[6,8,1],[0,2,0]],[[3,-1,2],[2,4,3],[5,2,8],[1,9,7]],[[-1,8,0],[5,5,0],[4,6,3],[5,7,1]],[[3,-1,-1],[2,4,4],[6,0,9],[2,8,0]],[[7,0,-1],[1,2,9],[1,1,3],[3,9,7]],[[7,1,1],[5,5,6],[8,3,8]]],[[[-1,7,9],[1,8,2],[4,2,9],[0,3,6]],[[5,7,5],[5,3,2],[5,5,4]],[[4,-1,2],[2,6,4],[8,2,0],[4,7,3]],[[2,-1,0],[0,1,5],[8,9,9],[2,3,3]],[[-1,-1,6],[7,1,8],[7,0,1],[1,0,2]],[[8,7,0],[3,6,6],[1,3,4]],[[3,-1,1],[0,9,3],[1,1,0],[8,6,9]]],[[[9,4,4],[7,9,2],[6,0,5]],[[7,0,8],[2,6,0],[9,4,8]],[[4,-1,-1],[0,2,0],[2,7,3],[6,3,1]],[[-1,2,8],[1,3,1],[1,2,3],[2,9,8]],[[-1,1,-1],[7,7,5],[2,4,3],[1,2,0]],[[-1,5,3],[0,3,7],[9,6,4],[0,3,0]],[[9,8,3],[6,5,1],[1,5,6],[5,8,1]]],[[[2,0,-1],[5,2,7],[6,4,1],[6,5,4]],[[1,-1,-1],[0,8,6],[2,3,3],[2,0,3]],[[-1,5,6],[1,3,7],[2,3,2],[0,5,7]],[[0,0,7],[4,6,3],[9,8,9]],[[1,-1,4],[7,0,2],[8,9,1],[9,2,1]],[[-1,3,-1],[3,7,6],[1,8,3],[5,2,1]],[[9,-1,-1],[4,0,5],[9,1,0],[4,8,8]]],[[[-1,8,-1],[6,0,8],[0,4,7],[4,9,8]],[[-1,-1,1],[1,3,0],[2,6,1],[5,4,0]],[[9,0,1],[3,1,5],[9,2,6]],[[3,8,-1],[0,4,4],[2,0,6],[7,2,9]],[[-1,2,1],[6,5,5],[0,2,7],[9,1,2]],[[7,-1,9],[3,3,7],[3,8,3],[0,6,1]],[[-1,-1,3],[5,7,2],[1,5,3],[4,8,2]]],[[[-1,6,-1],[8,4,0],[5,5,3],[9,4,7]],[[0,-1,9],[2,0,7],[1,1,9],[4,5,7]],[[2,-1,-1],[2,4,1],[3,3,7],[5,0,9]],[[-1,6,-1],[6,1,1],[9,5,8],[5,8,0]],[[9,3,-1],[2,3,0],[6,8,8],[3,1,3]],[[0,-1,-1],[3,2,2],[0,3,6],[4,1,1]],[[-1,2,-1],[7,1,8],[7,6,2],[2,4,0]]],[[[2,8,2],[1,4,8],[0,8,0]],[[-1,2,-1],[5,7,0],[4,8,7],[3,3,3]],[[1,-1,-1],[7,9,0],[0,5,9],[7,4,1]],[[3,6,9],[0,0,2],[6,4,9],[3,3,9]],[[1,-1,-1],[1,2,5],[3,4,5],[3,2,9]],[[-1,-1,6],[7,2,1],[8,1,1],[6,6,6]],[[2,8,-1],[5,0,4],[2,7,5],[3,1,0]]],[[[-1,9,-1],[2,7,4],[6,0,9],[6,6,6]],[[-1,3,1],[7,9,3],[5,3,2],[4,3,3]],[[1,-1,-1],[2,0,0],[3,8,2],[0,8,7]],[[0,2,-1],[9,6,1],[7,8,1],[1,5,8]],[[5,3,5],[0,7,2],[0,3,2]],[[-1,4,1],[9,5,1],[9,2,0],[1,4,8]],[[-1,3,-1],[1,4,7],[8,2,0],[5,6,4]]],[[[1,5,-1],[1,0,0],[2,3,1],[9,2,4]],[[5,4,8],[3,8,7],[0,6,6]],[[2,6,2],[3,1,8],[9,7,5]],[[-1,-1,6],[2,4,8],[3,0,8],[7,6,0]],[[2,0,-1],[3,1,4],[5,9,5],[9,0,2]],[[-1,9,4],[3,1,6],[2,0,3],[4,3,1]],[[-1,5,0],[7,1,3],[7,7,2],[1,8,9]]],[[[2,1,-1],[9,9,7],[6,2,1],[2,7,3]],[[2,-1,-1],[8,2,3],[5,8,1],[3,2,3]],[[-1,-1,0],[4,2,8],[5,1,8],[1,4,1]],[[6,0,4],[1,4,7],[3,3,7],[3,9,7]],[[0,9,3],[6,0,3],[8,0,4]],[[-1,9,-1],[2,0,5],[9,8,2],[4,5,0]],[[1,-1,-1],[6,5,5],[6,6,7],[0,0,1]]],[[[-1,7,-1],[9,6,5],[8,7,3],[4,6,9]],[[-1,3,4],[4,8,0],[6,1,5],[5,3,7]],[[0,1,2],[1,0,4],[8,1,7],[1,2,2]],[[-1,9,-1],[1,3,0],[3,5,3],[1,2,2]],[[-1,2,0],[5,0,8],[1,3,0],[0,2,1]],[[7,9,8],[0,6,6],[3,4,3]],[[6,9,7],[2,5,9],[4,2,8]]],[[[4,-1,0],[6,9,6],[1,9,8],[8,0,0]],[[3,2,1],[6,0,4],[2,6,8]],[[8,-1,-1],[1,2,9],[1,7,6],[3,0,2]],[[3,4,5],[7,2,4],[4,0,1],[0,3,5]],[[3,-1,-1],[3,9,1],[9,9,5],[7,3,2]],[[6,-1,3],[7,3,0],[1,2,4],[5,8,5]],[[2,7,8],[1,7,0],[1,5,2]]],[[[2,2,-1],[9,1,0],[8,9,2],[6,1,3]],[[4,7,5],[7,5,2],[6,1,1],[1,7,3]],[[2,-1,-1],[4,3,4],[4,1,9],[8,8,3]],[[8,7,2],[0,5,5],[8,7,9]],[[1,-1,-1],[1,5,0],[4,6,3],[5,3,2]],[[6,2,3],[0,2,4],[9,3,3]],[[-1,7,6],[0,0,0],[1,9,6],[8,0,0]]],[[[-1,2,1],[7,8,4],[3,5,5],[0,3,8]],[[6,-1,-1],[3,6,1],[2,2,0],[3,5,5]],[[-1,7,2],[8,5,0],[6,0,2],[8,9,4]],[[0,3,1],[7,9,7],[2,1,1]],[[-1,2,9],[4,9,9],[2,3,6],[4,7,9]],[[0,5,8],[4,3,1],[0,8,1]],[[4,1,-1],[3,0,2],[6,6,0],[3,1,7]]],[[[3,-1,4],[3,3,0],[6,5,2],[3,9,8]],[[-1,-1,5],[2,8,1],[3,0,1],[6,2,8]],[[-1,4,-1],[6,9,7],[4,7,1],[4,2,6]],[[-1,-1,5],[9,2,3],[2,0,0],[7,7,7]],[[-1,6,-1],[2,8,6],[1,9,0],[0,1,1]],[[8,-1,3],[0,3,2],[5,1,4],[8,4,1]],[[-1,5,-1],[9,5,3],[0,7,1],[2,0,9]]],[[[-1,-1,6],[0,4,9],[3,5,9],[5,3,7]],[[7,8,3],[6,7,2],[3,0,0]],[[9,4,-1],[8,7,1],[8,3,1],[1,1,3]],[[6,5,-1],[6,0,5],[2,3,2],[0,1,4]],[[-1,-1,6],[4,0,9],[2,8,4],[9,1,1]],[[6,-1,0],[2,3,0],[1,2,4],[0,2,2]],[[-1,-1,2],[9,5,8],[7,3,8],[7,5,1]]],[[[-1,6,-1],[5,4,1],[9,7,1],[0,8,3]],[[-1,7,-1],[0,5,6],[7,2,5],[2,0,7]],[[-1,8,-1],[2,6,3],[4,0,9],[6,0,7]],[[-1,1,1],[3,0,8],[5,0,9],[6,8,7]],[[2,-1,3],[1,6,1],[9,5,1],[8,2,3]],[[-1,-1,9],[5,4,4],[2,4,3],[2,1,4]],[[-1,-1,1],[0,8,2],[3,3,3],[0,9,2]]],[[[8,-1,-1],[3,5,0],[9,3,6],[2,4,7]],[[-1,-1,1],[2,0,0],[3,0,1],[1,2,1]],[[0,-1,-1],[7,7,3],[5,3,8],[6,3,9]],[[-1,0,6],[2,8,4],[8,6,9],[7,3,9]],[[-1,-1,8],[7,0,2],[5,4,5],[1,2,6]],[[-1,8,9],[1,0,1],[2,5,1],[4,1,4]],[[4,-1,-1],[5,6,0],[2,3,2],[3,9,7]]],[[[0,7,0],[8,6,9],[5,6,4]],[[7,-1,3],[1,6,3],[5,2,2],[7,7,3]],[[-1,1,-1],[4,3,2],[1,9,0],[4,1,7]],[[-1,-1,2],[3,3,0],[0,4,0],[5,7,8]],[[8,5,2],[9,9,4],[8,2,1],[6,8,1]],[[3,-1,-1],[5,9,6],[3,0,8],[1,2,1]],[[0,-1,-1],[3,4,2],[9,1,6],[5,2,0]]],[[[-1,3,4],[1,9,2],[1,2,7],[6,2,3]],[[-1,3,5],[7,5,4],[0,8,2],[5,4,1]],[[-1,8,4],[9,6,2],[3,7,9],[1,8,1]],[[4,1,6],[7,6,6],[4,5,0]],[[7,3,-1],[0,3,8],[0,9,7],[3,5,1]],[[6,-1,-1],[0,2,5],[1,0,9],[1,2,0]],[[9,3,0],[3,0,2],[8,8,2]]],[[[5,4,6],[0,9,3],[8,1,8],[8,2,1]],[[2,-1,-1],[6,6,9],[2,2,4],[6,6,4]],[[-1,0,3],[1,6,5],[7,9,7],[3,0,7]],[[-1,-1,2],[5,9,0],[3,0,0],[8,0,1]],[[-1,-1,5],[1,3,4],[2,4,3],[8,3,2]],[[5,1,3],[9,1,9],[3,1,2]],[[1,-1,-1],[0,5,0],[7,8,2],[7,4,7]]],[[[3,5,8],[2,0,9],[9,9,2]],[[7,-1,0],[3,4,0],[1,8,6],[6,0,6]],[[-1,6,-1],[4,7,7],[2,2,7],[1,0,8]],[[7,1,-1],[3,8,8],[4,5,1],[2,3,1]],[[-1,3,6],[3,1,1],[0,4,4],[8,2,1]],[[-1,-1,9],[6,7,9],[0,3,5],[3,5,4]],[[9,-1,-1],[5,5,2],[3,0,2],[2,0,1]]],[[[6,-1,9],[0,3,3],[5,0,2],[5,8,1]],[[3,-1,-1],[4,4,2],[6,3,1],[9,8,4]],[[-1,1,-1],[1,0,3],[3,6,2],[1,6,7]],[[8,-1,0],[5,9,2],[5,2,3],[9,0,0]],[[6,-1,5],[8,1,7],[2,1,7],[0,9,7]],[[1,1,6],[0,4,2],[7,2,4]],[[-1,-1,0],[3,4,8],[8,7,5],[9,3,2]]],[[[9,-1,-1],[0,9,0],[1,7,9],[3,8,2]],[[5,-1,-1],[0,1,7],[3,6,8],[6,3,3]],[[2,3,5],[2,5,8],[3,1,3]],[[4,4,-1],[8,2,2],[3,6,1],[8,4,7]],[[-1,0,7],[4,5,1],[1,2,0],[4,6,5]],[[-1,-1,2],[2,0,0],[0,9,7],[7,1,1]],[[1,-1,9],[5,0,2],[9,6,6],[8,3,4]]],[[[-1,-1,9],[1,7,1],[2,9,0],[3,3,0]],[[6,-1,-1],[1,5,8],[1,1,8],[5,6,1]],[[7,-1,4],[7,3,3],[7,6,9],[8,0,4]],[[3,-1,-1],[2,2,3],[4,5,1],[0,1,9]],[[-1,5,0],[3,6,2],[2,2,0],[7,4,3]],[[-1,5,-1],[9,8,0],[4,2,8],[3,0,8]],[[-1,-1,7],[6,5,2],[0,2,9],[4,1,6]]],[[[3,9,2],[5,6,1],[2,3,9]],[[2,3,-1],[3,2,0],[9,2,1],[1,8,8]],[[6,3,1],[4,0,5],[7,0,0]],[[-1,4,-1],[8,0,1],[3,5,6],[6,3,9]],[[4,7,-1],[8,7,8],[0,9,8],[2,2,0]],[[-1,-1,7],[5,9,1],[2,5,1],[3,6,6]],[[0,5,7],[1,4,2],[1,4,0],[7,4,3]]],[[[3,-1,8],[5,8,1],[2,1,9],[3,7,3]],[[0,0,2],[9,4,3],[1,5,1]],[[4,-1,-1],[1,0,1],[9,5,8],[8,6,2]],[[-1,3,-1],[6,2,3],[4,8,5],[0,3,5]],[[9,1,7],[2,5,7],[2,4,9],[0,6,4]],[[6,3,-1],[7,1,0],[2,6,6],[1,0,3]],[[0,2,0],[8,7,7],[2,4,9]]],[[[-1,8,-1],[0,7,8],[3,0,0],[2,2,1]],[[8,5,5],[3,9,1],[6,9,6],[6,7,4]],[[-1,1,-1],[7,0,4],[3,5,1],[8,9,7]],[[-1,-1,9],[9,2,4],[1,4,2],[3,1,4]],[[-1,-1,5],[3,2,0],[6,6,2],[9,0,4]],[[3,3,5],[2,0,5],[8,0,2]],[[-1,1,6],[1,7,2],[3,8,7],[0,3,1]]],[[[6,-1,2],[9,2,7],[1,3,8],[2,7,3]],[[5,2,9],[5,5,5],[6,0,1],[6,1,0]],[[6,3,-1],[9,0,3],[9,8,2],[8,7,0]],[[2,0,4],[4,2,7],[8,6,0]],[[9,8,-1],[3,8,7],[3,1,0],[9,1,3]],[[2,1,6],[1,0,3],[1,4,1]],[[3,7,4],[4,0,5],[2,5,4]]],[[[4,-1,9],[6,4,0],[7,8,3],[8,9,5]],[[3,5,3],[0,9,1],[2,1,2]],[[1,1,6],[6,6,3],[7,1,2]],[[7,3,5],[2,2,0],[9,1,4]],[[7,4,1],[1,8,3],[8,0,9],[7,0,0]],[[-1,-1,0],[3,5,9],[3,0,4],[2,1,8]],[[7,8,5],[2,2,0],[3,6,5],[2,4,6]]],[[[-1,4,-1],[5,6,5],[5,6,2],[8,2,3]],[[-1,-1,6],[0,0,9],[2,7,1],[6,3,8]],[[-1,-1,3],[3,4,1],[7,3,8],[1,0,2]],[[-1,-1,5],[6,9,2],[0,0,8],[3,1,3]],[[8,0,0],[1,0,4],[4,2,9],[2,7,5]],[[-1,-1,3],[9,2,9],[1,2,9],[1,4,7]],[[-1,-1,5],[7,7,3],[4,8,6],[1,1,0]]],[[[-1,0,-1],[7,0,9],[8,7,2],[6,1,9]],[[3,8,3],[4,3,6],[7,5,2],[4,8,2]],[[-1,9,-1],[5,1,2],[4,1,3],[1,3,0]],[[-1,6,1],[9,5,3],[4,1,1],[7,0,0]],[[-1,-1,4],[3,1,2],[5,8,6],[6,3,5]],[[8,0,7],[2,3,0],[4,6,0]],[[-1,-1,2],[2,2,1],[5,7,0],[9,8,9]]],[[[5,-1,-1],[2,6,9],[1,3,9],[1,3,2]],[[-1,-1,4],[1,0,2],[1,2,9],[2,3,1]],[[2,9,-1],[8,8,5],[6,0,4],[3,2,8]],[[3,7,-1],[0,6,0],[1,0,4],[9,0,4]],[[7,-1,-1],[8,4,5],[5,3,8],[0,0,3]],[[-1,-1,2],[9,7,0],[3,1,6],[4,5,1]],[[-1,-1,2],[7,8,6],[5,3,6],[7,7,1]]],[[[0,-1,-1],[1,8,3],[1,7,8],[2,1,1]],[[5,3,-1],[0,6,5],[8,4,0],[9,2,6]],[[-1,-1,9],[7,2,9],[9,3,1],[4,8,3]],[[-1,-1,5],[6,6,5],[8,3,5],[1,0,7]],[[7,-1,-1],[3,2,0],[9,2,6],[7,2,7]],[[0,-1,3],[1,3,2],[4,0,1],[5,2,8]],[[-1,9,-1],[0,0,2],[4,4,6],[3,1,4]]],[[[7,0,7],[4,2,6],[9,1,1]],[[-1,-1,2],[0,9,4],[8,7,6],[6,6,1]],[[-1,-1,3],[5,2,3],[4,3,2],[8,5,4]],[[-1,-1,3],[2,1,3],[0,0,2],[3,4,9]],[[9,6,3],[2,1,1],[7,8,9],[0,1,8]],[[-1,-1,9],[0,1,6],[0,5,8],[5,5,3]],[[-1,8,4],[7,5,2],[1,2,0],[0,3,7]]],[[[-1,2,-1],[0,0,1],[2,0,2],[8,3,3]],[[5,-1,7],[3,4,4],[7,0,3],[8,2,1]],[[6,-1,-1],[1,7,6],[8,4,2],[2,0,9]],[[-1,-1,9],[5,1,4],[0,1,0],[8,3,5]],[[-1,6,-1],[0,3,2],[1,2,3],[3,7,6]],[[-1,-1,4],[6,9,7],[5,6,7],[5,1,9]],[[5,8,-1],[9,0,1],[1,3,8],[2,9,4]]],[[[-1,-1,7],[4,6,1],[4,2,0],[2,3,1]],[[0,3,2],[7,5,5],[1,6,9],[7,4,3]],[[9,8,8],[7,8,8],[9,8,0]],[[-1,-1,3],[3,2,2],[0,4,6],[3,6,6]],[[-1,0,-1],[2,1,7],[1,2,8],[0,5,5]],[[5,-1,-1],[3,2,7],[9,4,9],[1,0,0]],[[3,3,-1],[4,9,2],[1,6,1],[5,1,0]]],[[[0,-1,-1],[5,3,8],[1,9,3],[2,7,9]],[[-1,6,-1],[8,8,3],[3,4,3],[0,5,1]],[[-1,2,-1],[4,8,0],[4,2,5],[0,7,0]],[[-1,-1,6],[1,8,5],[9,2,3],[5,4,3]],[[-1,0,-1],[6,2,2],[4,4,9],[7,1,7]],[[-1,7,3],[0,0,2],[6,2,3],[9,6,6]],[[-1,1,1],[2,1,1],[1,7,9],[8,5,0]]],[[[1,-1,3],[1,4,5],[1,9,1],[5,7,5]],[[-1,-1,0],[9,1,8],[8,9,0],[3,3,2]],[[3,-1,3],[6,2,6],[9,7,2],[7,0,3]],[[8,1,8],[2,7,0],[9,0,0]],[[-1,2,-1],[4,3,5],[2,8,0],[0,6,1]],[[2,-1,5],[6,0,6],[8,4,9],[2,4,7]],[[7,-1,-1],[5,4,6],[4,1,1],[2,3,3]]],[[[-1,2,-1],[5,0,0],[3,6,4],[6,3,3]],[[-1,-1,6],[1,8,6],[3,9,1],[4,0,9]],[[5,-1,-1],[9,8,7],[2,5,0],[7,9,4]],[[4,1,2],[5,2,2],[1,3,6]],[[9,8,-1],[8,8,8],[2,1,0],[5,3,0]],[[-1,1,1],[7,2,2],[0,6,4],[2,4,5]],[[3,0,-1],[0,1,9],[3,7,7],[7,3,1]]],[[[3,-1,-1],[6,3,3],[2,1,5],[9,3,1]],[[1,5,8],[8,7,9],[6,4,2]],[[4,0,2],[2,9,6],[5,5,2]],[[3,0,1],[1,3,2],[4,4,0],[1,7,7]],[[9,3,8],[6,7,5],[1,1,8],[0,8,0]],[[-1,-1,7],[2,2,8],[9,4,6],[0,4,5]],[[-1,-1,0],[9,0,0],[1,3,7],[3,6,2]]],[[[-1,0,-1],[1,1,9],[8,9,5],[2,1,5]],[[-1,4,-1],[0,8,9],[9,3,7],[2,2,1]],[[0,-1,4],[7,6,8],[0,7,0],[3,0,7]],[[5,-1,-1],[2,9,0],[5,2,4],[3,4,3]],[[1,2,-1],[7,6,0],[7,3,3],[1,8,2]],[[6,-1,8],[5,4,1],[1,1,6],[6,3,6]],[[3,2,9],[3,0,8],[5,4,2]]],[[[3,0,-1],[5,3,1],[2,1,2],[7,0,0]],[[5,-1,-1],[2,8,6],[2,7,2],[4,5,4]],[[1,-1,-1],[8,4,3],[3,1,6],[0,3,7]],[[9,9,0],[5,0,8],[3,2,5]],[[-1,1,6],[1,1,6],[8,4,3],[1,0,4]],[[1,-1,2],[9,8,0],[9,3,6],[6,9,9]],[[0,-1,-1],[3,5,2],[2,7,7],[7,4,8]]],[[[-1,-1,2],[8,2,1],[0,0,5],[8,5,4]],[[2,0,0],[6,6,3],[7,1,6]],[[-1,-1,4],[9,2,3],[6,2,8],[1,6,7]],[[1,4,-1],[2,3,3],[1,5,4],[3,4,3]],[[3,-1,2],[0,5,1],[9,7,0],[9,7,3]],[[-1,6,0],[2,9,2],[8,7,9],[1,9,1]],[[5,-1,-1],[0,8,4],[7,0,3],[8,5,1]]],[[[9,0,0],[1,8,7],[9,0,9]],[[4,9,-1],[7,1,8],[0,5,3],[9,4,6]],[[2,-1,-1],[1,2,3],[2,6,7],[5,5,1]],[[-1,-1,3],[4,6,0],[6,2,3],[3,0,2]],[[7,0,2],[3,5,1],[9,8,0]],[[6,7,1],[4,5,4],[5,1,8],[1,2,8]],[[0,1,-1],[7,2,4],[3,8,3],[2,3,6]]],[[[-1,9,6],[3,2,7],[4,6,8],[3,8,1]],[[0,7,2],[2,7,7],[6,4,9]],[[0,-1,-1],[6,5,1],[8,5,1],[8,2,3]],[[6,-1,-1],[1,0,5],[3,3,9],[3,2,3]],[[-1,0,5],[0,0,1],[5,4,8],[9,3,4]],[[-1,-1,1],[7,5,7],[1,2,0],[1,0,0]],[[-1,1,4],[3,4,9],[9,8,2],[2,6,2]]],[[[-1,-1,4],[0,3,3],[3,5,4],[1,0,9]],[[2,-1,6],[9,6,8],[7,5,2],[2,6,1]],[[6,-1,-1],[5,0,2],[3,4,1],[0,8,7]],[[7,-1,-1],[1,7,2],[6,4,1],[0,1,4]],[[0,-1,-1],[9,1,5],[0,5,0],[0,2,8]],[[8,3,5],[3,9,8],[2,7,7]],[[6,1,1],[9,9,3],[2,3,2],[4,8,3]]],[[[3,6,-1],[5,7,6],[7,0,1],[7,0,4]],[[6,2,5],[2,3,6],[1,4,0]],[[-1,7,-1],[9,3,2],[5,0,1],[2,8,9]],[[-1,0,-1],[1,8,1],[9,3,9],[3,1,2]],[[8,-1,-1],[0,9,6],[2,1,5],[5,3,1]],[[-1,2,7],[6,2,3],[2,8,0],[8,0,0]],[[5,-1,3],[3,4,4],[4,4,1],[7,9,8]]],[[[-1,1,8],[1,8,4],[8,1,7],[3,0,5]],[[-1,6,4],[0,4,0],[0,8,2],[6,5,2]],[[-1,3,-1],[3,2,1],[3,7,2],[3,6,0]],[[0,2,7],[1,5,5],[9,3,5]],[[2,0,-1],[1,9,6],[7,8,1],[5,7,4]],[[9,-1,-1],[4,4,1],[8,3,3],[6,3,2]],[[-1,-1,1],[2,0,2],[7,9,9],[0,6,9]]],[[[1,3,-1],[2,4,0],[8,0,7],[3,5,8]],[[5,-1,-1],[6,0,2],[0,5,2],[9,1,0]],[[-1,2,-1],[2,8,7],[8,3,7],[6,4,3]],[[6,9,1],[9,1,5],[1,6,6]],[[-1,8,-1],[2,5,3],[7,9,3],[2,2,3]],[[8,-1,1],[2,1,6],[0,0,5],[7,1,4]],[[4,-1,0],[9,3,0],[7,3,1],[4,4,9]]],[[[8,-1,0],[3,7,6],[3,9,8],[3,7,1]],[[0,1,-1],[7,0,2],[3,3,8],[9,3,1]],[[1,4,3],[4,9,6],[4,1,0]],[[0,6,1],[2,5,7],[2,4,8]],[[1,2,5],[4,5,1],[9,8,2],[3,7,2]],[[-1,-1,5],[7,6,4],[6,9,3],[2,5,0]],[[8,-1,-1],[6,2,1],[5,0,2],[0,0,9]]],[[[0,5,-1],[4,5,2],[7,5,4],[7,4,8]],[[1,0,6],[3,6,4],[2,1,4]],[[-1,6,-1],[0,1,5],[2,9,9],[4,8,8]],[[-1,2,1],[3,3,7],[8,3,1],[6,9,0]],[[8,5,-1],[9,1,2],[1,3,2],[2,0,0]],[[-1,-1,3],[0,3,2],[6,5,9],[1,0,8]],[[9,-1,-1],[3,7,1],[2,6,3],[0,7,7]]],[[[5,5,7],[2,6,2],[2,9,9]],[[-1,2,-1],[1,5,4],[8,9,6],[7,2,0]],[[2,1,-1],[4,1,8],[5,6,3],[9,0,5]],[[-1,0,0],[2,0,6],[8,0,3],[5,0,9]],[[8,9,2],[8,6,1],[7,3,3]],[[1,3,-1],[7,3,0],[3,4,4],[2,4,1]],[[3,-1,6],[8,3,7],[4,1,0],[7,1,1]]],[[[-1,-1,2],[6,4,5],[3,3,4],[9,5,4]],[[-1,6,6],[1,7,1],[0,2,1],[0,4,1]],[[8,1,2],[6,0,6],[0,9,2],[2,0,6]],[[8,8,7],[4,3,5],[5,3,8]],[[-1,2,-1],[2,4,1],[9,0,7],[3,1,8]],[[5,-1,-1],[5,7,0],[8,0,3],[1,0,2]],[[-1,-1,7],[3,3,9],[9,7,1],[2,9,3]]],[[[-1,2,-1],[1,9,1],[6,3,1],[6,0,2]],[[1,-1,-1],[4,9,0],[1,7,3],[5,7,4]],[[-1,0,-1],[4,7,2],[5,9,3],[6,0,7]],[[0,1,2],[1,8,3],[2,4,0]],[[0,-1,-1],[8,4,3],[6,7,4],[3,9,5]],[[8,-1,3],[5,2,8],[1,6,5],[9,7,8]],[[0,8,2],[9,3,1],[2,3,6],[2,0,5]]],[[[-1,3,-1],[5,6,3],[9,7,1],[0,5,0]],[[3,-1,-1],[4,2,8],[6,9,0],[8,1,3]],[[-1,9,2],[8,1,1],[4,1,0],[2,7,4]],[[-1,3,-1],[0,2,6],[4,5,1],[9,7,3]],[[-1,9,-1],[7,8,0],[4,5,9],[0,1,8]],[[3,-1,2],[2,1,5],[3,7,6],[6,8,3]],[[-1,-1,5],[6,0,2],[4,0,2],[7,1,2]]],[[[-1,1,2],[5,2,8],[0,4,6],[3,0,3]],[[0,5,-1],[8,0,2],[5,0,0],[7,1,2]],[[9,1,-1],[3,8,2],[4,8,2],[4,2,4]],[[-1,-1,1],[7,1,5],[1,9,7],[2,0,6]],[[3,-1,-1],[8,6,7],[7,9,0],[8,3,3]],[[6,9,1],[9,4,0],[3,6,7]],[[-1,1,-1],[5,5,3],[2,4,3],[1,6,9]]],[[[-1,3,4],[3,7,3],[2,2,4],[8,8,2]],[[7,1,-1],[2,3,7],[8,8,4],[1,1,3]],[[9,3,7],[5,1,6],[0,0,2]],[[-1,8,5],[0,6,3],[9,5,0],[4,6,0]],[[7,3,-1],[5,5,2],[1,2,8],[1,6,1]],[[9,5,0],[0,1,6],[9,6,4]],[[-1,2,-1],[0,4,7],[0,9,9],[1,2,3]]],[[[9,6,3],[7,2,2],[1,4,4]],[[9,0,6],[3,5,2],[1,0,5]],[[0,-1,-1],[5,7,8],[3,4,7],[2,4,9]],[[4,0,2],[2,0,2],[6,0,5],[1,0,8]],[[3,0,5],[9,7,1],[8,6,9],[1,1,4]],[[3,6,2],[8,6,1],[3,5,8]],[[-1,8,7],[9,7,3],[0,3,1],[2,3,1]]],[[[-1,8,-1],[8,7,6],[4,0,1],[6,3,2]],[[5,-1,0],[4,4,4],[9,0,2],[6,3,2]],[[-1,-1,3],[5,0,3],[9,8,1],[1,1,2]],[[-1,9,-1],[3,3,4],[5,7,0],[0,2,2]],[[2,-1,-1],[9,3,7],[2,2,1],[5,3,6]],[[5,-1,7],[3,0,6],[0,8,9],[1,8,7]],[[8,-1,-1],[0,1,6],[7,5,1],[4,9,1]]],[[[2,-1,-1],[4,0,1],[4,7,0],[7,2,4]],[[1,-1,7],[3,9,3],[6,9,6],[3,4,2]],[[-1,1,-1],[5,2,9],[6,6,3],[0,2,8]],[[3,-1,-1],[0,0,8],[5,8,8],[7,3,1]],[[1,-1,-1],[5,9,0],[2,2,5],[1,3,2]],[[-1,4,-1],[3,2,0],[1,3,0],[9,1,1]],[[5,8,-1],[4,6,7],[8,0,7],[9,6,5]]],[[[-1,-1,3],[9,3,2],[7,0,4],[6,3,0]],[[0,2,-1],[2,0,3],[9,3,2],[7,2,1]],[[-1,-1,3],[6,8,0],[8,5,1],[8,3,2]],[[1,6,6],[3,4,5],[3,1,0]],[[-1,7,5],[6,9,8],[1,4,4],[1,6,0]],[[-1,-1,5],[1,7,7],[1,2,0],[5,1,5]],[[8,-1,9],[4,7,2],[0,9,8],[9,2,4]]],[[[-1,-1,7],[9,7,5],[8,2,0],[9,0,5]],[[-1,0,1],[9,2,3],[2,0,8],[1,5,2]],[[-1,-1,1],[0,8,3],[6,2,6],[8,1,6]],[[3,0,-1],[7,4,8],[6,3,5],[2,5,5]],[[-1,6,1],[4,0,3],[3,7,4],[0,3,9]],[[4,7,9],[7,1,2],[2,8,3]],[[-1,4,-1],[1,3,0],[2,6,1],[9,4,1]]],[[[-1,9,3],[7,1,0],[6,3,2],[8,1,7]],[[0,2,-1],[5,7,5],[6,1,6],[3,5,2]],[[9,-1,-1],[3,0,9],[8,3,6],[1,8,4]],[[2,2,-1],[5,3,4],[2,9,9],[6,1,8]],[[2,4,6],[7,4,0],[5,1,1]],[[4,-1,-1],[3,2,7],[0,0,0],[8,9,4]],[[3,-1,-1],[0,1,3],[8,2,5],[1,7,0]]],[[[-1,1,-1],[3,2,2],[3,2,9],[3,7,6]],[[-1,3,7],[6,0,4],[3,8,9],[7,6,0]],[[9,-1,-1],[7,4,1],[3,2,2],[9,1,9]],[[8,-1,1],[0,2,1],[5,2,3],[0,5,4]],[[-1,5,-1],[9,4,1],[0,7,8],[0,1,1]],[[4,-1,-1],[6,6,8],[0,2,0],[5,5,2]],[[-1,-1,3],[5,0,6],[7,4,8],[1,3,8]]],[[[0,5,5],[6,2,5],[0,7,0]],[[-1,-1,3],[3,0,9],[9,4,1],[0,3,0]],[[4,-1,9],[4,2,4],[5,1,8],[0,1,6]],[[0,7,4],[8,2,3],[2,4,9]],[[8,6,-1],[7,9,2],[1,5,1],[9,1,8]],[[6,8,3],[2,7,1],[2,1,2],[5,0,3]],[[-1,-1,6],[2,3,7],[7,1,3],[8,6,3]]],[[[1,-1,-1],[8,3,1],[2,6,1],[3,3,8]],[[9,-1,-1],[3,4,6],[5,4,9],[8,0,0]],[[-1,-1,8],[7,0,4],[2,4,2],[1,5,3]],[[2,6,5],[5,2,7],[3,0,5],[2,9,0]],[[-1,-1,9],[4,7,7],[2,1,1],[7,3,3]],[[-1,0,-1],[8,6,8],[6,4,6],[0,2,9]],[[-1,3,-1],[0,1,5],[1,1,2],[7,0,9]]],[[[4,-1,-1],[6,3,8],[8,7,1],[1,3,6]],[[0,7,6],[2,2,7],[5,8,4],[6,8,1]],[[2,0,-1],[9,9,1],[7,1,0],[2,2,2]],[[2,-1,-1],[0,9,2],[1,5,0],[1,4,0]],[[1,4,9],[5,3,6],[3,0,3]],[[0,6,1],[9,2,8],[3,5,0]],[[-1,8,4],[7,3,5],[9,3,4],[7,3,5]]],[[[1,-1,6],[6,3,3],[0,2,7],[3,0,7]],[[9,-1,-1],[5,6,3],[3,3,0],[2,0,8]],[[-1,-1,5],[2,5,3],[9,9,4],[2,3,4]],[[-1,5,-1],[8,4,7],[9,8,7],[0,1,0]],[[-1,5,5],[7,9,1],[3,1,6],[6,1,4]],[[2,9,2],[1,7,0],[8,1,2]],[[-1,0,2],[8,1,0],[4,8,6],[4,1,2]]],[[[0,6,7],[8,0,9],[2,3,0]],[[0,1,-1],[4,5,9],[0,1,3],[9,2,3]],[[9,-1,6],[3,8,8],[1,4,7],[6,2,0]],[[3,-1,5],[0,4,1],[7,1,7],[1,8,2]],[[2,-1,-1],[8,0,4],[9,6,1],[6,5,2]],[[4,-1,-1],[9,3,7],[1,8,7],[3,2,0]],[[-1,5,-1],[1,6,5],[2,3,5],[2,4,3]]],[[[-1,6,7],[8,3,7],[7,8,4],[5,2,3]],[[-1,-1,1],[2,5,0],[4,0,6],[1,3,4]],[[-1,-1,0],[2,5,0],[1,9,1],[0,3,1]],[[5,8,-1],[4,6,4],[0,3,9],[2,0,1]],[[8,-1,-1],[6,0,2],[7,3,3],[5,6,4]],[[-1,1,-1],[2,7,6],[2,9,3],[7,0,1]],[[-1,3,-1],[5,8,8],[9,2,9],[2,9,1]]],[[[-1,6,2],[5,3,2],[7,8,8],[9,1,7]],[[1,3,3],[0,2,9],[1,2,1],[0,8,6]],[[9,-1,-1],[3,4,4],[0,4,4],[7,0,2]],[[0,-1,-1],[7,9,5],[3,3,1],[2,8,5]],[[1,4,9],[2,5,7],[0,1,0]],[[1,-1,-1],[9,5,4],[7,6,2],[2,3,6]],[[-1,-1,3],[0,5,0],[6,8,3],[1,6,8]]],[[[3,1,5],[7,0,5],[8,1,2]],[[-1,-1,8],[9,8,3],[0,7,9],[4,7,2]],[[-1,-1,1],[6,4,8],[5,3,2],[2,8,4]],[[-1,7,5],[1,8,3],[3,4,6],[0,3,4]],[[-1,6,-1],[0,9,2],[0,3,7],[1,7,0]],[[-1,1,6],[6,2,2],[2,1,2],[0,9,6]],[[5,5,-1],[1,1,0],[3,9,0],[9,3,4]]],[[[-1,2,-1],[6,2,5],[2,1,4],[1,0,7]],[[-1,-1,9],[6,8,9],[5,0,9],[1,3,0]],[[-1,-1,7],[8,3,2],[4,3,0],[8,0,5]],[[-1,-1,3],[0,2,4],[6,4,7],[7,4,1]],[[5,4,7],[3,3,2],[6,9,1],[9,3,0]],[[1,-1,-1],[5,2,0],[6,2,3],[0,5,1]],[[-1,3,-1],[7,6,8],[1,8,8],[2,1,9]]],[[[-1,-1,6],[8,3,7],[0,3,8],[0,1,8]],[[-1,-1,4],[2,4,6],[1,1,4],[1,3,2]],[[-1,-1,0],[7,9,0],[1,2,3],[5,3,4]],[[-1,9,1],[3,9,2],[9,8,7],[5,3,0]],[[1,4,3],[6,0,0],[8,7,6]],[[2,2,4],[9,5,0],[0,5,6],[9,5,2]],[[-1,3,-1],[7,1,6],[7,5,2],[2,8,1]]],[[[-1,2,-1],[5,3,2],[2,8,1],[8,1,7]],[[8,0,-1],[8,7,7],[0,8,5],[5,3,2]],[[9,-1,7],[3,0,4],[2,1,6],[6,4,1]],[[3,3,6],[9,0,2],[4,9,4]],[[5,-1,0],[4,9,6],[0,6,1],[2,2,9]],[[-1,-1,1],[7,3,6],[1,1,3],[1,3,0]],[[3,-1,-1],[0,7,4],[0,5,8],[9,2,5]]],[[[6,-1,-1],[4,0,4],[6,9,1],[9,1,6]],[[-1,0,3],[4,3,3],[2,1,5],[5,0,7]],[[7,8,5],[5,4,7],[3,8,1]],[[3,7,-1],[2,3,7],[3,2,2],[6,3,5]],[[9,6,0],[3,8,2],[0,6,4]],[[9,8,5],[2,1,1],[2,8,1],[9,0,0]],[[-1,-1,4],[1,2,9],[2,0,8],[1,0,7]]],[[[7,8,1],[2,8,4],[9,1,0]],[[-1,0,-1],[3,6,7],[2,8,7],[6,7,0]],[[-1,3,-1],[6,5,4],[1,1,2],[4,9,2]],[[1,2,7],[9,2,9],[6,4,8]],[[3,5,-1],[0,7,2],[6,4,5],[3,3,2]],[[8,6,0],[0,5,3],[0,3,5],[2,9,3]],[[-1,3,9],[1,8,1],[0,1,1],[0,5,4]]],[[[8,-1,-1],[7,1,2],[7,0,0],[4,5,1]],[[2,1,2],[3,8,0],[6,4,0]],[[-1,-1,4],[0,3,9],[3,9,9],[1,6,5]],[[0,-1,-1],[3,7,6],[2,8,5],[2,8,4]],[[5,8,-1],[0,7,6],[9,4,9],[8,0,5]],[[1,-1,2],[1,3,1],[2,0,2],[3,3,1]],[[-1,5,6],[3,3,7],[2,1,6],[7,4,9]]],[[[4,1,6],[7,2,5],[3,3,5]],[[1,9,-1],[8,6,4],[2,9,5],[2,4,1]],[[4,8,0],[0,0,3],[0,1,6],[8,9,0]],[[6,8,5],[6,1,9],[9,3,0]],[[-1,5,-1],[2,7,2],[1,3,3],[3,1,5]],[[-1,0,2],[0,4,6],[3,9,2],[7,1,7]],[[-1,-1,0],[3,2,1],[7,4,8],[8,2,7]]],[[[6,3,9],[9,1,4],[4,9,8]],[[-1,-1,4],[1,5,2],[1,0,3],[1,3,8]],[[7,2,0],[7,1,5],[3,7,3],[2,6,3]],[[9,7,-1],[2,4,2],[6,5,3],[0,0,2]],[[-1,7,0],[7,8,3],[6,4,2],[5,2,8]],[[-1,-1,9],[6,5,5],[3,1,1],[8,4,9]],[[2,1,0],[0,8,0],[1,6,0]]],[[[2,1,-1],[6,0,2],[6,3,8],[3,4,2]],[[9,1,-1],[7,7,7],[5,2,5],[8,6,1]],[[9,-1,0],[2,0,8],[1,3,0],[6,9,0]],[[-1,4,-1],[6,6,2],[5,9,2],[1,5,1]],[[4,1,0],[2,3,8],[0,9,4]],[[3,9,-1],[1,7,7],[7,1,8],[3,2,5]],[[3,0,4],[3,8,3],[4,5,0]]],[[[-1,8,2],[6,3,2],[7,5,1],[3,2,7]],[[0,3,1],[1,3,0],[4,0,0]],[[-1,9,3],[5,9,3],[4,9,0],[2,2,2]],[[7,5,3],[2,1,8],[4,8,7]],[[-1,-1,0],[0,1,3],[9,4,3],[1,6,9]],[[4,9,-1],[6,5,8],[2,2,1],[8,6,8]],[[0,6,-1],[0,1,7],[1,5,4],[7,5,6]]],[[[-1,-1,7],[1,6,2],[0,2,5],[5,2,9]],[[9,-1,4],[1,1,3],[0,0,3],[9,7,6]],[[8,4,-1],[2,4,6],[7,0,8],[8,5,0]],[[1,3,3],[6,6,0],[7,3,6]],[[-1,2,-1],[3,3,4],[9,2,1],[7,8,1]],[[3,-1,-1],[5,8,4],[9,1,1],[2,7,9]],[[0,-1,0],[2,4,0],[5,2,8],[5,3,1]]],[[[3,4,-1],[3,5,8],[7,1,0],[3,3,3]],[[6,1,0],[0,5,6],[2,2,7]],[[8,-1,8],[4,7,0],[6,5,6],[0,3,3]],[[-1,4,4],[1,3,6],[5,8,9],[2,9,4]],[[-1,7,-1],[5,9,9],[2,9,7],[9,1,0]],[[-1,1,-1],[4,2,1],[1,1,2],[6,3,8]],[[-1,-1,8],[5,0,2],[7,2,0],[2,0,1]]],[[[5,-1,9],[7,0,0],[2,0,9],[6,8,2]],[[-1,-1,1],[2,6,0],[8,9,5],[7,9,5]],[[1,-1,-1],[8,1,9],[4,9,3],[2,7,3]],[[2,3,3],[4,1,0],[8,4,0],[4,4,3]],[[3,7,5],[6,0,1],[8,3,2]],[[-1,-1,0],[1,3,6],[2,5,0],[6,8,2]],[[1,-1,-1],[5,1,3],[7,1,2],[6,7,4]]],[[[8,9,-1],[6,3,0],[9,5,2],[8,4,2]],[[-1,8,-1],[4,3,0],[2,2,8],[6,3,2]],[[-1,-1,5],[3,3,0],[0,1,7],[7,0,0]],[[2,7,5],[7,1,3],[8,6,4]],[[3,5,1],[6,2,9],[2,0,9]],[[1,9,1],[6,7,9],[5,4,4],[3,8,1]],[[0,-1,2],[3,4,6],[5,1,1],[7,1,0]]],[[[0,-1,-1],[9,6,7],[2,9,3],[4,9,3]],[[-1,-1,2],[7,2,0],[7,5,5],[9,8,4]],[[-1,-1,8],[0,3,6],[7,4,0],[4,5,0]],[[4,7,1],[0,1,2],[0,5,7]],[[2,-1,1],[3,1,1],[9,9,2],[6,4,2]],[[6,3,8],[5,6,2],[3,2,6],[0,1,3]],[[-1,8,-1],[1,8,1],[8,1,3],[5,0,3]]],[[[1,7,-1],[6,6,9],[5,2,4],[7,5,4]],[[9,-1,-1],[2,2,0],[1,3,4],[9,7,2]],[[8,-1,-1],[4,0,9],[0,1,8],[0,3,1]],[[4,-1,1],[9,3,2],[1,5,2],[8,0,3]],[[1,5,3],[8,0,3],[5,2,6]],[[3,-1,1],[6,2,0],[4,7,0],[9,7,8]],[[-1,-1,8],[2,6,6],[3,5,1],[0,3,7]]],[[[-1,1,-1],[7,5,4],[4,2,6],[1,3,2]],[[0,-1,8],[9,0,9],[3,8,1],[9,4,2]],[[2,-1,7],[0,0,0],[9,3,6],[0,5,7]],[[-1,4,-1],[3,5,8],[1,6,2],[4,8,1]],[[2,-1,-1],[8,1,2],[1,7,4],[7,3,2]],[[5,0,9],[6,8,5],[0,3,3]],[[7,-1,0],[6,2,3],[3,9,1],[6,1,5]]],[[[0,6,-1],[9,8,9],[9,6,8],[2,1,7]],[[-1,5,3],[0,2,4],[1,6,0],[1,3,7]],[[2,2,4],[9,4,1],[1,1,3]],[[1,1,3],[2,6,2],[4,0,8]],[[3,-1,-1],[7,6,6],[4,4,0],[3,1,7]],[[-1,5,-1],[2,0,7],[0,0,9],[8,5,9]],[[5,5,8],[0,7,5],[3,2,3],[2,8,3]]],[[[6,1,8],[0,1,4],[2,5,1],[3,3,2]],[[4,0,6],[9,1,1],[5,2,6]],[[8,3,-1],[9,8,3],[8,2,9],[4,3,8]],[[0,-1,7],[5,2,2],[7,5,4],[6,1,7]],[[0,5,1],[0,0,2],[3,9,4]],[[7,-1,-1],[4,7,1],[9,3,9],[2,0,0]],[[1,-1,-1],[2,3,6],[8,6,7],[0,3,5]]],[[[-1,1,-1],[0,8,0],[1,0,9],[5,0,4]],[[-1,-1,7],[7,7,5],[1,9,1],[2,4,8]],[[9,5,7],[7,6,0],[0,3,6],[3,4,2]],[[-1,2,-1],[8,1,4],[5,2,6],[8,3,1]],[[-1,-1,1],[4,6,4],[8,3,2],[9,3,8]],[[3,-1,2],[1,3,9],[3,6,0],[3,2,6]],[[0,2,7],[2,9,0],[1,5,5]]],[[[-1,2,-1],[9,1,3],[9,6,2],[3,3,7]],[[9,3,1],[6,9,7],[5,1,0]],[[2,3,5],[7,1,3],[8,0,2]],[[-1,2,-1],[0,7,1],[9,0,4],[2,3,5]],[[6,2,-1],[7,1,6],[4,0,0],[8,8,4]],[[1,8,-1],[0,6,2],[4,1,5],[3,0,4]],[[7,5,0],[9,8,6],[3,5,2],[4,8,1]]],[[[-1,-1,3],[6,0,4],[0,0,3],[8,3,9]],[[-1,-1,6],[4,0,7],[2,5,9],[7,5,7]],[[-1,9,-1],[4,9,9],[8,2,7],[0,4,1]],[[3,1,3],[2,3,8],[1,3,6],[2,2,2]],[[-1,-1,8],[4,5,0],[5,0,1],[2,8,3]],[[6,1,2],[1,4,1],[7,6,0]],[[1,2,-1],[0,6,1],[7,9,5],[5,3,8]]],[[[7,7,2],[0,2,2],[6,3,6]],[[-1,0,-1],[4,3,1],[4,1,0],[4,2,2]],[[3,4,1],[4,0,2],[3,9,1]],[[0,4,-1],[2,0,9],[1,8,2],[8,6,1]],[[3,6,-1],[7,3,6],[0,7,5],[5,8,3]],[[5,-1,1],[3,9,2],[1,5,5],[0,3,8]],[[-1,1,7],[9,6,8],[9,7,9],[5,8,0]]],[[[1,3,3],[9,2,3],[2,4,6]],[[8,-1,-1],[3,4,7],[8,3,9],[7,7,3]],[[-1,0,2],[1,4,9],[8,1,2],[8,1,7]],[[1,9,1],[1,3,8],[9,2,0],[0,7,5]],[[-1,-1,4],[8,0,0],[6,0,7],[0,1,9]],[[-1,6,-1],[5,5,6],[2,0,3],[1,5,2]],[[6,-1,-1],[0,6,3],[2,4,2],[4,5,5]]],[[[9,6,7],[2,7,0],[3,5,0],[1,0,0]],[[8,3,5],[1,4,6],[1,8,7]],[[-1,7,-1],[8,9,4],[2,9,9],[6,2,4]],[[3,5,-1],[7,2,5],[5,1,4],[0,2,3]],[[-1,7,-1],[0,3,8],[1,8,2],[3,2,0]],[[-1,-1,2],[1,1,6],[4,6,6],[2,0,1]],[[5,-1,-1],[9,0,4],[3,1,3],[9,8,3]]],[[[-1,2,-1],[1,0,5],[3,3,2],[1,7,7]],[[-1,0,-1],[4,6,4],[1,5,9],[1,4,8]],[[1,0,-1],[6,1,5],[3,3,2],[2,2,5]],[[-1,-1,2],[8,0,0],[3,0,1],[0,8,6]],[[9,-1,2],[4,7,6],[7,7,6],[9,0,4]],[[5,9,7],[9,3,5],[1,8,8]],[[2,-1,4],[6,3,2],[1,9,8],[3,0,3]]],[[[-1,-1,6],[0,6,0],[9,0,7],[0,2,7]],[[-1,-1,1],[1,2,8],[1,1,3],[6,0,5]],[[-1,-1,1],[3,0,3],[8,7,6],[4,7,2]],[[9,2,-1],[6,2,3],[8,2,6],[3,4,4]],[[7,1,-1],[4,5,0],[3,1,5],[0,9,8]],[[-1,-1,5],[1,3,2],[4,2,8],[2,9,7]],[[0,-1,-1],[5,3,5],[4,9,8],[3,9,1]]],[[[9,-1,8],[2,5,5],[2,7,0],[3,3,9]],[[4,-1,1],[4,7,1],[2,4,1],[0,1,8]],[[-1,0,0],[7,3,8],[1,6,3],[3,5,2]],[[8,-1,-1],[4,3,1],[2,2,0],[9,8,6]],[[0,-1,-1],[9,1,6],[6,0,8],[6,4,0]],[[5,7,9],[7,5,4],[9,6,1]],[[-1,-1,0],[3,3,1],[7,3,5],[2,2,2]]],[[[-1,8,8],[2,2,6],[0,2,8],[4,0,8]],[[5,5,6],[5,7,3],[7,4,1]],[[-1,-1,0],[4,7,3],[2,4,2],[3,5,1]],[[-1,-1,3],[8,4,5],[2,2,0],[3,1,0]],[[-1,-1,6],[9,0,9],[1,1,9],[2,9,0]],[[0,-1,-1],[1,1,6],[2,4,0],[8,9,7]],[[6,3,9],[7,3,7],[3,1,6],[3,5,1]]],[[[8,-1,-1],[1,6,2],[5,5,9],[5,8,6]],[[8,-1,6],[4,2,2],[5,6,1],[9,3,1]],[[3,0,-1],[2,0,4],[1,3,6],[5,2,3]],[[-1,-1,0],[1,0,2],[7,9,1],[3,2,5]],[[0,3,6],[4,3,7],[0,8,4]],[[7,-1,1],[1,9,9],[1,2,8],[8,7,2]],[[4,-1,-1],[4,0,9],[3,3,0],[7,0,7]]],[[[6,4,4],[2,2,0],[8,6,7]],[[1,-1,9],[4,8,5],[4,0,0],[2,2,8]],[[9,5,5],[7,8,7],[1,0,2],[6,2,6]],[[1,5,3],[3,9,1],[1,3,9]],[[5,7,4],[4,0,1],[0,7,9]],[[1,8,3],[0,3,3],[3,7,2],[8,0,1]],[[-1,6,-1],[2,3,3],[1,2,5],[9,6,0]]],[[[-1,-1,6],[1,0,5],[0,9,9],[4,2,8]],[[7,9,4],[1,0,8],[5,1,6],[9,3,9]],[[-1,3,-1],[5,4,0],[8,5,3],[1,4,0]],[[0,-1,-1],[8,3,3],[9,2,1],[7,3,2]],[[-1,0,-1],[4,3,0],[8,5,7],[4,6,2]],[[3,-1,-1],[7,2,7],[7,6,3],[1,2,5]],[[6,-1,-1],[1,6,1],[1,2,2],[0,8,2]]],[[[1,6,3],[8,1,2],[5,2,4],[4,8,9]],[[6,1,-1],[3,5,0],[2,9,4],[6,8,1]],[[0,2,6],[0,6,6],[3,1,0]],[[5,-1,-1],[4,5,3],[9,9,7],[0,3,9]],[[-1,-1,0],[3,2,2],[2,4,4],[9,8,5]],[[-1,7,-1],[0,1,0],[1,0,1],[2,2,5]],[[-1,3,-1],[8,3,7],[7,3,7],[8,1,7]]],[[[-1,6,3],[7,2,0],[3,9,9],[3,8,4]],[[2,-1,-1],[1,5,5],[8,2,2],[2,1,6]],[[0,0,7],[5,5,3],[3,1,5]],[[4,9,2],[7,5,0],[8,0,1]],[[3,-1,3],[6,6,1],[3,8,3],[0,6,4]],[[7,9,-1],[7,1,4],[8,2,2],[2,9,1]],[[0,1,-1],[7,0,8],[4,4,1],[9,0,6]]],[[[-1,6,-1],[7,4,2],[5,9,6],[3,2,6]],[[0,3,3],[8,0,0],[7,0,2],[5,8,1]],[[-1,1,-1],[4,1,0],[7,5,7],[2,8,9]],[[9,-1,8],[9,4,2],[0,4,7],[5,3,4]],[[-1,-1,9],[6,3,3],[1,8,8],[9,7,1]],[[1,-1,-1],[2,3,1],[0,6,2],[4,5,2]],[[2,1,3],[0,1,5],[3,0,6]]],[[[0,5,7],[8,2,3],[4,8,2],[3,1,1]],[[-1,2,-1],[2,7,3],[6,5,1],[4,1,0]],[[-1,-1,1],[1,1,0],[6,1,5],[8,2,3]],[[-1,3,-1],[7,6,2],[7,9,3],[8,9,8]],[[5,-1,-1],[6,4,2],[2,8,0],[9,0,9]],[[-1,7,-1],[9,5,2],[3,4,0],[5,3,0]],[[-1,3,-1],[7,6,1],[4,0,9],[0,4,6]]],[[[4,-1,-1],[8,0,9],[3,6,9],[8,1,7]],[[5,-1,-1],[7,5,1],[8,1,6],[2,5,1]],[[-1,-1,5],[1,7,0],[0,4,3],[6,3,3]],[[-1,-1,4],[2,7,6],[9,0,9],[1,1,1]],[[2,5,-1],[3,3,4],[0,6,0],[7,6,1]],[[3,3,2],[7,8,9],[8,5,2],[9,2,2]],[[4,2,2],[8,0,4],[3,0,0]]],[[[1,3,3],[5,1,4],[6,7,8]],[[-1,-1,2],[8,4,1],[6,9,3],[9,9,0]],[[1,-1,9],[3,2,5],[1,2,3],[7,1,4]],[[9,-1,-1],[7,2,0],[6,5,2],[0,5,7]],[[4,2,-1],[8,9,6],[8,2,1],[3,3,0]],[[5,-1,-1],[0,2,4],[0,2,0],[6,8,6]],[[3,-1,7],[0,0,4],[1,7,3],[1,5,8]]],[[[3,-1,-1],[2,5,2],[1,2,9],[5,0,0]],[[4,-1,-1],[9,0,9],[8,8,4],[1,6,1]],[[1,4,-1],[7,6,6],[3,3,3],[8,2,7]],[[8,-1,4],[9,3,9],[7,2,5],[2,8,2]],[[-1,6,-1],[7,1,6],[0,7,3],[5,0,9]],[[3,-1,7],[0,8,0],[6,4,5],[4,5,1]],[[1,1,0],[3,2,3],[1,0,2]]],[[[-1,1,-1],[3,7,5],[6,8,6],[2,4,7]],[[-1,-1,2],[1,0,1],[0,5,4],[2,8,5]],[[-1,2,-1],[4,0,4],[1,9,0],[2,2,3]],[[3,1,0],[8,1,8],[7,3,6]],[[1,9,6],[5,8,5],[0,3,6]],[[2,6,9],[1,3,4],[3,3,0],[5,1,9]],[[7,7,2],[9,4,3],[7,2,0],[0,8,9]]],[[[8,-1,3],[1,1,4],[2,0,6],[2,2,9]],[[3,4,7],[2,0,5],[0,0,5]],[[-1,3,-1],[2,0,2],[6,3,1],[7,9,3]],[[-1,5,-1],[9,1,0],[4,9,3],[8,8,5]],[[1,-1,-1],[0,8,6],[4,1,2],[1,4,8]],[[8,-1,7],[6,2,3],[7,9,2],[9,6,6]],[[0,-1,1],[3,4,7],[7,5,3],[5,0,1]]],[[[0,-1,9],[4,3,2],[0,3,5],[1,5,1]],[[1,4,-1],[2,2,8],[4,1,5],[3,3,5]],[[-1,7,8],[9,4,9],[1,6,1],[2,3,1]],[[-1,-1,5],[1,4,7],[3,6,9],[8,0,0]],[[2,7,0],[0,8,9],[6,2,8]],[[-1,3,-1],[4,0,3],[6,9,6],[3,1,0]],[[7,-1,-1],[8,0,7],[7,2,6],[2,5,2]]],[[[-1,1,-1],[0,1,1],[2,6,3],[3,4,0]],[[7,-1,-1],[0,6,9],[6,9,8],[2,5,2]],[[7,6,0],[9,9,9],[4,4,0]],[[-1,-1,3],[2,1,4],[2,6,9],[2,3,1]],[[0,7,-1],[6,4,3],[8,1,0],[8,7,3]],[[5,-1,-1],[5,2,4],[5,7,1],[8,8,0]],[[3,0,3],[1,5,1],[5,2,2],[3,8,7]]],[[[6,-1,0],[6,3,9],[1,1,2],[3,0,3]],[[3,1,-1],[0,7,6],[6,6,3],[7,4,7]],[[3,2,9],[4,0,8],[7,1,9]],[[-1,9,9],[1,0,4],[2,8,8],[5,0,0]],[[4,-1,-1],[6,0,4],[7,5,1],[1,3,8]],[[-1,8,-1],[4,5,2],[3,2,3],[8,2,0]],[[-1,-1,5],[5,1,1],[2,2,5],[2,9,7]]],[[[-1,1,-1],[1,5,8],[4,2,0],[0,5,8]],[[9,-1,-1],[5,5,0],[2,7,0],[7,4,6]],[[9,-1,2],[0,9,1],[6,7,1],[6,1,6]],[[2,2,4],[7,0,6],[3,3,1]],[[-1,2,2],[4,8,6],[5,9,4],[0,1,3]],[[-1,-1,0],[3,1,3],[4,1,7],[9,3,3]],[[8,8,-1],[2,9,2],[3,7,5],[0,8,3]]],[[[2,4,5],[3,2,6],[6,3,7],[9,0,8]],[[7,8,-1],[2,0,0],[4,5,1],[7,2,3]],[[-1,-1,9],[0,5,0],[0,8,2],[1,9,0]],[[8,6,3],[2,3,1],[6,1,1]],[[-1,3,3],[7,5,5],[0,1,1],[0,5,9]],[[6,4,1],[9,3,7],[2,7,4]],[[-1,-1,3],[8,2,4],[6,1,4],[9,8,2]]],[[[4,-1,7],[3,7,3],[2,1,6],[4,4,1]],[[-1,2,-1],[8,6,1],[1,5,9],[2,1,2]],[[-1,8,-1],[5,0,8],[5,1,3],[1,3,0]],[[-1,-1,6],[1,8,3],[3,0,2],[0,7,5]],[[0,-1,-1],[3,9,4],[9,7,3],[5,6,9]],[[-1,0,-1],[5,0,2],[0,6,9],[7,2,9]],[[8,4,-1],[1,0,2],[4,7,8],[3,6,2]]],[[[-1,7,3],[3,2,3],[6,6,1],[5,5,1]],[[6,-1,-1],[9,3,1],[3,3,9],[7,4,6]],[[1,-1,-1],[2,3,3],[8,0,7],[7,0,8]],[[-1,1,-1],[8,8,4],[0,5,1],[7,2,2]],[[2,0,2],[9,8,3],[4,9,2]],[[2,1,6],[0,1,5],[5,4,4],[1,2,0]],[[-1,8,-1],[9,5,0],[7,6,4],[0,9,0]]],[[[-1,2,4],[2,6,0],[1,2,6],[7,9,4]],[[-1,5,-1],[2,8,5],[4,8,1],[0,6,3]],[[7,-1,6],[5,2,0],[3,0,7],[3,1,0]],[[4,8,1],[3,3,1],[1,0,7]],[[9,1,-1],[0,5,6],[1,9,4],[2,2,3]],[[0,3,8],[9,2,3],[7,4,8]],[[5,9,-1],[6,3,8],[9,2,7],[0,1,5]]],[[[0,7,2],[3,4,9],[1,2,3],[9,3,2]],[[1,-1,-1],[9,0,0],[0,1,0],[5,5,6]],[[5,7,3],[4,8,0],[6,5,2]],[[8,2,7],[8,2,1],[3,1,5]],[[0,3,5],[8,7,4],[7,4,6],[8,1,0]],[[-1,2,-1],[4,9,8],[6,3,3],[9,6,0]],[[-1,-1,9],[2,1,6],[4,1,1],[3,2,7]]],[[[-1,-1,7],[1,5,4],[8,8,0],[3,2,8]],[[-1,2,-1],[5,0,2],[5,6,1],[1,3,7]],[[2,3,0],[9,1,4],[6,9,4]],[[-1,7,7],[2,8,3],[2,0,5],[2,9,5]],[[3,-1,-1],[2,6,2],[9,6,3],[8,8,1]],[[-1,-1,9],[1,7,1],[5,7,6],[6,3,1]],[[4,3,4],[3,9,4],[0,0,1],[0,0,0]]]];
+
+</script>
+<script>
+'use strict';
+const P = Platform, SL = SortLogic, EMPTY = SL.EMPTY;
+P.init({ id: 'sort', strings: {
+  ru: { title: 'Разложи всё', tagline: 'Собирай по три одинаковых', play: 'Играть', level: 'Уровень {0}', win: 'Уровень пройден!', next: 'Дальше',
+        triple: '▶ ×3 за рекламу: +{0} 🪙', stuck: 'Нет ходов', stuckHint: 'Отмените ход или начните заново', restart: 'Заново',
+        noCoins: 'Не хватает монет', getCoins: '▶ Смотреть рекламу: +{0} 🪙', close: 'Закрыть', undo: 'Отмена', free: 'бесплатно',
+        tip1: 'Тапни предмет, потом пустую ячейку. Собери три одинаковых на одной полке.',
+        tip2: 'Предметы на задней планке выезжают вперёд, когда полка освободится.',
+        noHint: 'Подсказки нет — отмените ход', extraDone: 'Доп. полка уже добавлена', nothingUndo: 'Нечего отменять',
+        combo: 'Комбо ×{0}!', moves: 'Ходов: {0}', par: 'лучше всего: {0}', stars: 'Звёзд: {0}' },
+  en: { title: 'Shelf Sort', tagline: 'Match three of a kind', play: 'Play', level: 'Level {0}', win: 'Level complete!', next: 'Next',
+        triple: '▶ ×3 for an ad: +{0} 🪙', stuck: 'No moves left', stuckHint: 'Undo a move or restart', restart: 'Restart',
+        noCoins: 'Not enough coins', getCoins: '▶ Watch an ad: +{0} 🪙', close: 'Close', undo: 'Undo', free: 'free',
+        tip1: 'Tap an item, then an empty slot. Put three of a kind on one shelf.',
+        tip2: 'Items on the back plank slide forward when a shelf is cleared.',
+        noHint: 'No hint available — undo a move', extraDone: 'Extra shelf already added', nothingUndo: 'Nothing to undo',
+        combo: 'Combo ×{0}!', moves: 'Moves: {0}', par: 'best: {0}', stars: 'Stars: {0}' },
+} });
+
+/* ---------- Константы и состояние ---------- */
+const W = 360;
+const EMOJI = ['🍎', '🍋', '🍇', '🍓', '🥕', '🌽', '🍪', '🧀', '🥛', '🍞'];
+const TINT = [0, 52, 280, 340, 28, 95, 36, 48, 200, 24].map((h, i) => `hsl(${h} ${i === 8 ? 25 : 70}% ${i === 8 ? 88 : 62}%)`);
+const COST = { undo: 10, hint: 20, extra: 30 }, AD_COINS = 40;
+const cv = document.getElementById('c'), g = cv.getContext('2d'), stage = document.getElementById('stage');
+const $ = id => document.getElementById(id);
+const REDUCED = matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+let H = 640, scale = 1;
+let level = P.store.get('level', 1);
+let state, history = [], selected = null, hint = null, extraUsed = false, finished = false, undoUsedFree = false;
+let moves = 0, cleared = 0, totalTriples = 1, par = null, tutorial = null, epoch = 0;
+let comboN = 0, lastClearT = -1e9, lastInput = 0, introT0 = 0, shake = null, nudge = null, nudgeVer = -1, stateVer = 0, reward = 0;
+const anims = [], parts = [], floats = [], hidden = {}, pulls = {}, lands = {}, flashes = {};
+
+/* ---------- Загрузка уровня ---------- */
+function loadLevel(n) {
+  level = n; P.store.set('level', n); epoch++;
+  let shelves;
+  const base = window.SORT_LEVELS;
+  if (base) {
+    const idx = (n - 1) % base.length, cycle = Math.floor((n - 1) / base.length);
+    let perm = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    if (cycle > 0) { let a = cycle * 2654435761 >>> 0; for (let i = 9; i > 0; i--) { a = (a * 1664525 + 1013904223) >>> 0; const j = a % (i + 1); [perm[i], perm[j]] = [perm[j], perm[i]]; } }
+    shelves = base[idx].map(rows => ({ front: rows[0].map(x => x < 0 ? x : perm[x]), queue: rows.slice(1).map(r => r.map(x => perm[x])) }));
+  } else shelves = SL.genLevel(n).shelves;
+  state = { shelves }; history = []; selected = null; hint = null; extraUsed = false; finished = false; undoUsedFree = false;
+  moves = 0; cleared = 0; comboN = 0; par = null; tutorial = null; nudge = null; stateVer = 0; lastInput = performance.now();
+  totalTriples = shelves.reduce((s, sh) => s + sh.front.filter(x => x !== EMPTY).length + sh.queue.length * 3, 0) / 3;
+  anims.length = 0; parts.length = 0; floats.length = 0;
+  for (const o of [hidden, pulls, lands, flashes]) for (const k in o) delete o[k];
+  introT0 = performance.now();
+  $('lvl').textContent = P.t('level', n);
+  $('tip').textContent = n === 1 ? P.t('tip1') : n === 2 ? P.t('tip2') : '';
+  refreshHud(); P.gameplayStart();
+  // лучшее число ходов (для звёзд) и подсказка-«рука» на первых уровнях считаются сразу после показа уровня
+  const ep = epoch, snap = SL.clone(state);
+  setTimeout(() => { if (ep !== epoch) return; const sol = SL.solve(snap, 30000); if (sol) { par = sol.length; if (n <= 2) tutorial = sol[0]; } }, 40);
+}
+function refreshHud() {
+  $('coinN').textContent = P.Economy.coins;
+  $('cUndo').textContent = undoUsedFree ? COST.undo + ' 🪙' : P.t('free');
+  $('cHint').textContent = COST.hint + ' 🪙';
+  $('cExtra').textContent = extraUsed ? '✓' : COST.extra + ' 🪙';
+  $('bNoAds').style.display = (P.Monetization.adsRemoved || P.demo) ? 'none' : '';
+  $('bSound').textContent = P.Snd.userMuted ? '🔇' : '🔊';
+  $('progFill').style.width = Math.min(100, Math.round(cleared / Math.max(1, totalTriples) * 100)) + '%';
+}
+P.Economy.onChange = () => $('coinN').textContent = P.Economy.coins;
+const starsMap = () => P.store.get('stars', {});
+const totalStars = () => Object.values(starsMap()).reduce((s, v) => s + v, 0);
+function refreshStart() {
+  $('startLevel').textContent = P.t('level', level);
+  const ts = totalStars(); $('startStars').textContent = ts ? '★ ' + P.t('stars', ts) : '';
+}
+
+/* ---------- Раскладка полок ---------- */
+function layout() {
+  const n = state.shelves.length, cols = 2, rows = Math.ceil(n / cols);
+  const top = 100, bottom = 104, availH = H - top - bottom, cellH = Math.min(124, availH / rows);
+  const cellW = W / cols, out = [];
+  for (let i = 0; i < n; i++) {
+    const c = i % cols, r = Math.floor(i / cols);
+    const w = cellW - 16, h = cellH - 12, x = c * cellW + 8, y = top + r * cellH + (availH - cellH * rows) / 2;
+    out.push({ x, y, w, h, size: Math.min(w / 3 - 6, h * 0.5) });
+  }
+  return out;
+}
+const slotPos = (L, a) => ({ x: L.x + L.w * (a + .5) / 3, y: L.y + L.h * .68 });
+const backPos = (L, a) => ({ x: L.x + L.w * (a + .5) / 3, y: L.y + L.h * .24 });
+
+/* ---------- Ввод ---------- */
+cv.addEventListener('pointerdown', e => {
+  if (finished || !state) return;
+  lastInput = performance.now(); nudge = null;
+  const r = cv.getBoundingClientRect();
+  const px = (e.clientX - r.left) / r.width * W, py = (e.clientY - r.top) / r.height * H;
+  const lay = layout();
+  for (let i = 0; i < lay.length; i++) {
+    const L = lay[i];
+    for (let a = 0; a < 3; a++) {
+      const p = slotPos(L, a), s = L.size / 2 + 6;
+      if (Math.abs(px - p.x) < s + 4 && Math.abs(py - p.y) < s + 8) return tapSlot(i, a);
+    }
+  }
+  selected = null;
+});
+function tapSlot(i, a) {
+  hint = null;
+  const item = state.shelves[i].front[a];
+  if (item !== EMPTY) {
+    if (selected && selected.i === i && selected.a === a) selected = null; else { selected = { i, a }; P.Snd.select(); }
+    return;
+  }
+  if (!selected) return;
+  if (selected.i === i) { selected = null; return; }                     // на ту же полку класть бессмысленно
+  doMove(selected.i, selected.a, i, a);
+  selected = null;
+}
+function pushHistory() { history.push({ state: SL.clone(state), extraUsed, moves, cleared }); }
+function doMove(i, a, j, b) {
+  pushHistory(); moves++; stateVer++; tutorial = null; nudge = null;
+  const lay = layout(), now = performance.now(), FLY = 170, ep = epoch;
+  const from = slotPos(lay[i], a), to = slotPos(lay[j], b), item = state.shelves[i].front[a];
+  const ev = SL.applyMove(state, i, a, j, b);
+  anims.push({ type: 'fly', item, from, to, t0: now, dur: FLY, size: lay[j].size });
+  hidden[j + ',' + b] = now + FLY;
+  P.Snd.move(); P.vib(8);
+  let clears = 0;
+  for (const e of ev) {
+    if (e.type === 'clear') {
+      clears++;
+      const Lc = lay[e.shelf], cx = Lc.x + Lc.w / 2, cy = Lc.y + Lc.h * .68;
+      for (let k = 0; k < 3; k++) { const p = slotPos(Lc, k); anims.push({ type: 'pop', item: e.item, x: p.x, y: p.y, t0: now + FLY, dur: 340, size: Lc.size }); burst(p.x, p.y, TINT[e.item % 10]); }
+      anims.push({ type: 'ring', x: cx, y: cy, t0: now + FLY, dur: 420 });
+      flashes[e.shelf] = now + FLY;
+      for (let k = 0; k < 3; k++) hidden[e.shelf + ',' + k] = now + FLY;
+      setTimeout(() => { if (ep === epoch) onClear(cx, cy); }, FLY);
+    } else if (e.type === 'pull') {
+      pulls[e.shelf] = { t0: now + FLY + (clears ? 240 : 0), dur: 280 };
+    }
+  }
+  if (!clears) setTimeout(() => { if (ep === epoch) { P.Snd.land(); lands[j + ',' + b] = performance.now(); } }, FLY);
+  else lands[j + ',' + b] = now + FLY;
+  setTimeout(checkEnd, FLY + (clears ? 600 : 140));
+  refreshHud();
+}
+function onClear(cx, cy) {
+  const now = performance.now();
+  comboN = now - lastClearT < 4500 ? comboN + 1 : 1; lastClearT = now; cleared++;
+  P.Snd.clear(comboN - 1); P.vib(20);
+  shake = { t0: now, mag: Math.min(5, 2 + comboN), dur: 260 };
+  if (comboN >= 2) {
+    const bonus = (comboN - 1) * 2;
+    P.Economy.add(bonus);
+    float(P.t('combo', comboN), W / 2, Math.max(150, cy - 70), '#ffd24a', 28);
+    float('+' + bonus + ' 🪙', W / 2, Math.max(180, cy - 40), '#fff', 18);
+  }
+  refreshHud();
+}
+function checkEnd() {
+  if (finished || !state) return;
+  if (SL.isWon(state)) return win();
+  if (SL.noMoves(state)) return stuck();
+}
+function burst(x, y, color) {
+  for (let i = 0; i < 14; i++) { const a = Math.random() * 6.28, s = 1 + Math.random() * 2.8; parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1.2, life: 1, color, g: i % 4 === 0 ? '✦' : null }); }
+}
+function float(text, x, y, color, size) { floats.push({ text, x, y, color, size, t0: performance.now(), dur: 1100 }); }
+
+/* ---------- Победа / тупик ---------- */
+function starsFor(m) { return par == null ? 2 : m <= par + 1 ? 3 : m <= Math.ceil(par * 1.6) + 2 ? 2 : 1; }
+function win() {
+  finished = true; P.gameplayStop(); P.Snd.win(); P.vib(40);
+  const st = starsFor(moves);
+  reward = 8 + st * 4;
+  P.Economy.add(reward);
+  const map = starsMap(); if (!map[level] || map[level] < st) { map[level] = st; P.store.set('stars', map); }
+  $('winCoins').textContent = '+' + reward + ' 🪙';
+  $('winMoves').textContent = P.t('moves', moves) + (par ? ' · ' + P.t('par', par) : '');
+  $('bTriple').textContent = P.t('triple', reward * 2);
+  $('bTriple').disabled = false; $('bTriple').style.display = '';
+  const spans = [...document.querySelectorAll('#stars span')]; spans.forEach(s => s.classList.remove('on'));
+  spans.forEach((s, i) => { if (i < st) setTimeout(() => { s.classList.add('on'); P.Snd.star(i); }, 350 + i * 260); });
+  for (let i = 0; i < 46; i++) burst(W / 2 + (Math.random() - .5) * 220, H * .32, `hsl(${Math.random() * 360} 80% 62%)`);
+  show('pWin');
+}
+function stuck() {
+  finished = true; P.gameplayStop(); P.Snd.fail();
+  $('bStuckUndo').textContent = history.length ? P.t('undo') + ' · ' + COST.undo + ' 🪙' : '—';
+  $('bStuckUndo').style.display = history.length ? '' : 'none';
+  show('pStuck');
+}
+function show(id) { document.querySelectorAll('.panel').forEach(p => p.classList.toggle('show', p.id === id)); }
+
+/* ---------- Кнопки ---------- */
+function needCoins(cost, ok) {
+  if (P.Economy.spend(cost)) { P.Snd.coin(); refreshHud(); ok(); return; }
+  $('bGetCoins').textContent = P.t('getCoins', AD_COINS);
+  show('pCoins');
+}
+function popHistory() {
+  const h = history.pop(); state = h.state; extraUsed = h.extraUsed; moves = h.moves; cleared = h.cleared; selected = null; hint = null; nudge = null; stateVer++; epoch++;
+  for (const o of [hidden, pulls, lands, flashes]) for (const k in o) delete o[k]; anims.length = 0;
+  if (finished) { finished = false; show(null); P.gameplayStart(); }
+  refreshHud();
+}
+function undo() {
+  if (finished && SL.isWon(state)) return;                               // после победы отменять нельзя (награда уже выдана)
+  if (!history.length) return P.toast(P.t('nothingUndo'));
+  if (!undoUsedFree) { undoUsedFree = true; popHistory(); } else needCoins(COST.undo, popHistory);   // первая отмена за уровень бесплатна
+}
+$('bUndo').onclick = undo;
+$('bStuckUndo').onclick = undo;
+$('bStuckRestart').onclick = () => { show(null); loadLevel(level); };
+$('restart').onclick = () => loadLevel(level);
+$('bSound').onclick = () => { P.Snd.toggle(); if (!P.Snd.userMuted) P.Snd.tap(); refreshHud(); };
+$('bHint').onclick = () => needCoins(COST.hint, () => {
+  const sol = SL.solve(state, 30000);
+  if (!sol || !sol.length) { P.Economy.add(COST.hint); refreshHud(); return P.toast(P.t('noHint')); }
+  hint = Object.assign({ until: performance.now() + 3500 }, sol[0]); selected = null;
+});
+$('bExtra').onclick = () => {
+  if (extraUsed) return P.toast(P.t('extraDone'));
+  needCoins(COST.extra, () => {
+    pushHistory();
+    state.shelves.push({ front: [EMPTY, EMPTY, EMPTY], queue: [] }); extraUsed = true; stateVer++; refreshHud();
+  });
+};
+$('bCoinAd').onclick = () => { $('bGetCoins').textContent = P.t('getCoins', AD_COINS); show('pCoins'); };
+$('bGetCoins').onclick = () => { show(null); P.Monetization.rewarded(ok => { if (ok) { P.Economy.add(AD_COINS); P.Snd.coin(); } if (finished && SL.isWon(state)) show('pWin'); }); };
+$('bCloseCoins').onclick = () => { show(null); if (finished) (SL.isWon(state) ? show('pWin') : stuck()); };
+$('bTriple').onclick = () => { $('bTriple').disabled = true; P.Monetization.rewarded(ok => { if (ok) { P.Economy.add(reward * 2); P.Snd.coin(); $('bTriple').style.display = 'none'; $('winCoins').textContent = '+' + reward * 3 + ' 🪙'; } else $('bTriple').disabled = false; }); };
+$('bNext').onclick = () => { show(null); P.Monetization.levelDone(() => loadLevel(level + 1)); };
+$('bPlay').onclick = () => { show(null); loadLevel(level); };
+$('bNoAds').onclick = () => P.Monetization.buyRemoveAds(ok => { refreshHud(); if (ok) P.toast(P.t('adsOff')); });
+
+/* ---------- Отрисовка ---------- */
+function rrect(x, y, w, h, r) { g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h); }
+const ease = t => 1 - Math.pow(1 - Math.min(Math.max(t, 0), 1), 3);
+const easeOutBack = t => { t = Math.min(Math.max(t, 0), 1) - 1; return 1 + 2.70158 * t * t * t + 1.70158 * t * t; };
+
+function drawItem(item, x, y, size, alpha = 1, lift = 0, glow = false, rot = 0, sc = 1) {
+  g.save(); g.globalAlpha = alpha;
+  if (lift > 0) { g.fillStyle = 'rgba(0,0,0,.28)'; g.beginPath(); g.ellipse(x, y + size * .45, size * .42, size * .12, 0, 0, 6.28); g.fill(); }
+  g.translate(x, y - lift); g.rotate(rot); g.scale(sc, sc);
+  const s = size, hs = s / 2;
+  if (glow) { g.shadowColor = '#fff'; g.shadowBlur = 16; }
+  g.fillStyle = TINT[item % 10]; rrect(-hs, -hs, s, s, s * .24); g.fill();
+  g.shadowBlur = 0; g.fillStyle = 'rgba(255,255,255,.3)'; rrect(-hs, -hs, s, s * .32, s * .24); g.fill();
+  g.font = `${Math.round(s * .66)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#000'; g.fillText(EMOJI[item % 10], 0, s * .04);
+  g.restore();
+}
+const BUBBLES = Array.from({ length: 14 }, (_, i) => ({ x: (i * 97 % 360), y: (i * 151 % 700), r: 14 + (i * 13 % 34), s: .3 + (i % 5) * .12, p: i * 1.7 }));
+
+function draw(now) {
+  g.setTransform(scale, 0, 0, scale, 0, 0);
+  const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#2a1f4a'); bg.addColorStop(1, '#120e22');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  // мягкие «пузыри» на фоне: лёгкое движение даёт ощущение жизни
+  for (const b of BUBBLES) {
+    const yy = ((b.y - now * .004 * b.s * 10) % (H + 80) + H + 80) % (H + 80) - 40, xx = b.x + (REDUCED ? 0 : Math.sin(now / 2400 + b.p) * 10);
+    g.fillStyle = 'rgba(255,255,255,.04)'; g.beginPath(); g.arc(xx, yy, b.r, 0, 6.28); g.fill();
+  }
+  if (!state) return;
+  let sx = 0, sy = 0;
+  if (shake && !REDUCED) { const t = (now - shake.t0) / shake.dur; if (t >= 1) shake = null; else { const m = shake.mag * (1 - t); sx = (Math.random() - .5) * m; sy = (Math.random() - .5) * m; } }
+  g.save(); g.translate(sx, sy);
+  const lay = layout(), since = now - introT0;
+  state.shelves.forEach((sh, i) => {
+    const L = lay[i];
+    // планка
+    g.fillStyle = 'rgba(0,0,0,.25)'; rrect(L.x, L.y + 4, L.w, L.h, 14); g.fill();
+    g.fillStyle = '#6b4a72'; rrect(L.x, L.y, L.w, L.h, 14); g.fill();
+    g.fillStyle = '#7d5a85'; rrect(L.x, L.y, L.w, L.h * .52, 14); g.fill();
+    g.fillStyle = '#4a3350'; rrect(L.x + 6, L.y + L.h * .46, L.w - 12, L.h * .5, 10); g.fill();
+    // вспышка при сборе тройки
+    const fl = flashes[i]; if (fl && now >= fl && now < fl + 320) { g.fillStyle = `rgba(255,255,255,${.5 * (1 - (now - fl) / 320)})`; rrect(L.x, L.y, L.w, L.h, 14); g.fill(); }
+    // задний ряд (следующий) + счётчик рядов
+    if (sh.queue.length) {
+      const nxt = sh.queue[0];
+      for (let a = 0; a < 3; a++) { const p = backPos(L, a); drawItem(nxt[a], p.x, p.y, L.size * .56, .5 * Math.min(1, since / 400)); }
+      if (sh.queue.length > 1) { g.fillStyle = 'rgba(255,255,255,.8)'; g.font = '700 11px system-ui'; g.textAlign = 'right'; g.textBaseline = 'alphabetic'; g.fillText('+' + (sh.queue.length - 1), L.x + L.w - 8, L.y + 14); }
+    }
+    // ячейки
+    for (let a = 0; a < 3; a++) { const p = slotPos(L, a); g.fillStyle = 'rgba(0,0,0,.28)'; rrect(p.x - L.size / 2, p.y - L.size / 2, L.size, L.size, L.size * .22); g.fill(); }
+    // предметы переднего ряда
+    const pl = pulls[i];
+    for (let a = 0; a < 3; a++) {
+      const it = sh.front[a]; if (it === EMPTY) continue;
+      const key = i + ',' + a, hid = hidden[key]; if (hid && now < hid) continue;
+      if (pl && now < pl.t0) continue;
+      const p = slotPos(L, a);
+      let sz = L.size, al = 1, dy = 0, rot = 0, sc = 1;
+      if (pl && now < pl.t0 + pl.dur) { const e = ease((now - pl.t0) / pl.dur); sz = L.size * (.6 + .4 * e); al = .4 + .6 * e; dy = -(1 - e) * L.h * .4; }
+      // падение предметов при старте уровня: по очереди сверху
+      const k = (since - (i * 3 + a) * 45) / 380;
+      if (k < 1 && !REDUCED) { if (k < 0) continue; dy -= (1 - easeOutBack(k)) * 80; al *= Math.min(1, k * 2); }
+      // «сочное» приземление: короткое сжатие-растяжение
+      const ld = lands[key]; if (ld && now >= ld && now < ld + 240 && !REDUCED) sc = 1 + .22 * Math.sin(Math.PI * (now - ld) / 240);
+      const sel = selected && selected.i === i && selected.a === a;
+      if (sel) rot = REDUCED ? 0 : Math.sin(now / 90) * .07;
+      const nd = nudge && now - lastInput > 9000 && nudge.i === i && nudge.a === a && Math.sin(now / 160) > 0;
+      drawItem(it, p.x, p.y + dy, sz, al, sel ? 10 : 0, sel || nd, rot, sel ? 1.08 : sc);
+    }
+  });
+  // подсказка за монеты: источник и цель
+  if (hint && now < hint.until) {
+    const pulse = .5 + .5 * Math.sin(now / 120);
+    const A = slotPos(lay[hint.i], hint.a), B = slotPos(lay[hint.j], hint.b), sz = lay[hint.i].size;
+    g.save(); g.lineWidth = 3 + pulse * 2; g.strokeStyle = '#ffd24a';
+    rrect(A.x - sz / 2 - 3, A.y - sz / 2 - 3, sz + 6, sz + 6, sz * .26); g.stroke();
+    g.setLineDash([6, 5]); rrect(B.x - sz / 2 - 3, B.y - sz / 2 - 3, sz + 6, sz + 6, sz * .26); g.stroke(); g.restore();
+  }
+  // подсказка-«рука» на первых уровнях: показывает, куда перенести предмет
+  if (tutorial && moves === 0 && !finished && since > 900) {
+    const A = slotPos(lay[tutorial.i], tutorial.a), B = slotPos(lay[tutorial.j], tutorial.b);
+    const cyc = (now % 2200) / 2200, k = cyc < .15 ? 0 : cyc < .7 ? ease((cyc - .15) / .55) : 1, hx = A.x + (B.x - A.x) * k, hy = A.y + (B.y - A.y) * k;
+    g.save(); g.strokeStyle = 'rgba(255,210,74,.9)'; g.lineWidth = 3; g.setLineDash([6, 5]);
+    rrect(B.x - lay[tutorial.j].size / 2 - 3, B.y - lay[tutorial.j].size / 2 - 3, lay[tutorial.j].size + 6, lay[tutorial.j].size + 6, 12); g.stroke(); g.restore();
+    g.font = '34px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('👆', hx + 6, hy + 22 - (cyc < .15 ? Math.sin(cyc / .15 * Math.PI) * 6 : 0));
+  }
+  // летящие предметы, всплытия и кольца
+  for (let k = anims.length - 1; k >= 0; k--) {
+    const an = anims[k], t = (now - an.t0) / an.dur;
+    if (t >= 1) { anims.splice(k, 1); continue; }
+    if (t < 0) continue;
+    if (an.type === 'fly') { const e = ease(t); drawItem(an.item, an.from.x + (an.to.x - an.from.x) * e, an.from.y + (an.to.y - an.from.y) * e - Math.sin(e * Math.PI) * 16, an.size, 1, 0, true, (e - .5) * .25, 1 + .08 * Math.sin(e * Math.PI)); }
+    else if (an.type === 'pop') drawItem(an.item, an.x, an.y, an.size * (1 + .55 * Math.sin(t * Math.PI)) * (1 - t * .6), 1 - t);
+    else if (an.type === 'ring') { g.save(); g.globalAlpha = (1 - t) * .8; g.strokeStyle = '#fff'; g.lineWidth = 4 * (1 - t) + 1; g.beginPath(); g.arc(an.x, an.y, 10 + t * 70, 0, 6.28); g.stroke(); g.restore(); }
+  }
+  // частицы
+  for (let k = parts.length - 1; k >= 0; k--) {
+    const p = parts[k]; p.x += p.vx; p.y += p.vy; p.vy += .12; p.life -= .025;
+    if (p.life <= 0) { parts.splice(k, 1); continue; }
+    g.globalAlpha = Math.min(1, p.life);
+    if (p.g) { g.fillStyle = p.color; g.font = '14px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(p.g, p.x, p.y); }
+    else { g.fillStyle = p.color; g.beginPath(); g.arc(p.x, p.y, 3.2, 0, 6.28); g.fill(); }
+    g.globalAlpha = 1;
+  }
+  g.restore();
+  // всплывающие надписи (комбо, бонус)
+  for (let k = floats.length - 1; k >= 0; k--) {
+    const f = floats[k], t = (now - f.t0) / f.dur;
+    if (t >= 1) { floats.splice(k, 1); continue; }
+    const pop = t < .15 ? easeOutBack(t / .15) : 1;
+    g.save(); g.globalAlpha = t < .7 ? 1 : 1 - (t - .7) / .3; g.translate(f.x, f.y - t * 46); g.scale(pop, pop);
+    g.font = `800 ${f.size}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 5; g.strokeStyle = 'rgba(20,10,40,.85)'; g.strokeText(f.text, 0, 0); g.fillStyle = f.color; g.fillText(f.text, 0, 0); g.restore();
+  }
+  // мягкий намёк при бездействии: считаем ход заранее, показываем лишь пульсацию предмета
+  if (!finished && P.playing && now - lastInput > 9000 && nudgeVer !== stateVer) {
+    nudgeVer = stateVer; const ep = epoch, snap = SL.clone(state);
+    setTimeout(() => { if (ep !== epoch || nudgeVer !== stateVer) return; const sol = SL.solve(snap, 8000); nudge = sol && sol.length ? sol[0] : null; }, 0);
+  }
+}
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(stage.clientWidth * dpr); cv.height = Math.round(stage.clientHeight * dpr);
+  scale = cv.width / W; H = cv.height / scale;
+}
+addEventListener('resize', resize); resize();
+
+let firstFrame = true;
+function loop(now) {
+  requestAnimationFrame(loop);                                   // следующий кадр планируем первым: сбой в draw не должен останавливать игру
+  const dpr = window.devicePixelRatio || 1;                      // во встроенных окнах размер сцены может появиться позже первого кадра
+  if (cv.width !== Math.round(stage.clientWidth * dpr) || cv.height !== Math.round(stage.clientHeight * dpr)) resize();
+  if (!(scale > 0) || !isFinite(H)) return;
+  draw(now);
+  if (firstFrame) { firstFrame = false; P.ready(); }
+}
+
+/* ---------- Старт ---------- */
+P.onLang = () => { $('lvl').textContent = P.t('level', level); refreshStart(); if (state) refreshHud(); };
+loadLevel(level); P.gameplayStop();
+refreshStart();
+show('pStart');
+const daily = P.Economy.claimDaily();
+if (daily) setTimeout(() => P.toast(P.t('daily', daily.amount) + (daily.streak > 1 ? ' · ' + P.t('dailyStreak', daily.streak) : ''), 2600), 500);
+P.Monetization.init(refreshHud);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
